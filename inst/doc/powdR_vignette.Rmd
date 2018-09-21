@@ -1,0 +1,105 @@
+---
+title: "powdR: Full Pattern Summation of X-ray Powder Diffraction Data"
+bibliography: bibliography.bib
+author: "Benjamin Butler"
+date: "`r Sys.Date()`"
+output:
+      rmarkdown::html_vignette:
+        fig_caption: yes
+        fig_width: 7
+        fig_height: 6
+vignette: >
+  %\VignetteIndexEntry{powdR: Full Pattern Summation of X-ray Powder Diffraction Data}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+`powdR` is an R implementation of the full pattern summation approach to quantitative mineralogy, which is otherwise available in Excel spreadsheets such as FULLPAT [@Chipera2002] and ROCKJOCK [@Eberl2003]. Implementation in R allows for faster computation than is currently available in FULLPAT or ROCKJOCK, and provides a user-friendly shiny application to help with the often iterative process of mineral quantification.
+
+
+## Full pattern summation
+A powerful property of XRPD data is that it can provide quantitative estimates of phase concentrations (mineral and amorphous). Though several methods are available for quantitative mineralogy, full pattern summation is particularly suitable for mineral mixtures containing disordered and amorphous phases. A prime example of such mixtures is soil, where clay minerals represent disordered phases, and organic matter is present as a common X-ray amorphous constituent.
+
+Full pattern summation is based on the principle that an observed pattern is comprised of the sum of signals from pure individual components. When using  full pattern summation, a library of pure standards **measured on the same instrument as the sample** is required. Phases from the library are selected, and their relative contributions optimised until appropriate fit of the observed pattern is achieved [@Chipera2002]. The fit is refined using least squares optimisation of an objective parameter.
+
+Version 0.1.0 of the `powdR` package currently implements full pattern summation via a standardless approach. The prerequisite of this approach is that all mineral and amorphous phases can be identified within the sample, and that these must sum to 100 weight % [@Chipera2013;@Omotoso2006].
+
+## `fps`
+Full pattern summation in `powdR` is provided in the `fps` function. In the following example the full pattern summation process using `fps` will start with a reference library containing a single quartz phase, and examining the residuals of the fit. If running this vignette yourself, all plots can be made interactive by:
+
+`plot(fit, interactive = TRUE)`
+
+Making them interactive aids visual interpretation of the fitted patterns, which can otherwise be difficult when using static plots.
+
+```{r, fig.show='hold', fig.cap = "**Figure 1:** The resulting fit on a sandstone soil when `fps` is applied using a single quartz reference pattern. The top plot displays the measured and fitted patterns, and the bottom plots displays the residuals.", message = FALSE, warning = FALSE}
+library(powdR)
+
+data(minerals)
+data(soils)
+
+#Apply summation to the sandstone sample, with quartz as the only mineral
+fit <- fps(lib = minerals,
+           smpl = soils$sandstone,
+           refs = "QUA.1",
+           std = "QUA.1",
+           align = 0.2)
+
+#plot the data to interpret the fit
+plot(fit)
+```
+
+In this case, the fitted pattern consistently overestimates the quartz peak intensities compared to the measured pattern, but underestimates the background contribution. This can occur when X-ray amorphous phases are present within the sample. To Account for this, an organic matter phase from the reference library will be added, and the fit recomputed.
+
+```{r, fig.show='hold', fig.cap = "**Figure 2:** The resulting full pattern fit on a sandstone soil when `fps` is applied using reference patterns from quartz and organic matter.", message = FALSE, warning = FALSE}
+#Apply fps to the sandstone sample with quartz (crystalline) and organic matter (amorphous)
+fit <- fps(lib = minerals,
+           smpl = soils$sandstone,
+           refs = c("QUA.1", "ORG"),
+           std = "QUA.1",
+           align = 0.2)
+
+#plot the data to interpret the fit
+plot(fit)
+```
+
+Now the fit is much improved, highlighting how organic matter is an important component of this pattern. Based on the current residuals, there is a notable peak at 12.3 degrees 2theta, which is often associated with kaolinite. There are also numerous peaks either side of the main quartz peak at 26.6 degrees 2theta, which are often coincident with feldspar minerals. The next fit will therefore add kaolinite, plagioclase and potassium feldspar to the process.
+
+```{r, fig.show='hold', fig.cap = "**Figure 3:** The resulting full pattern fit on a sandstone soil when `fps` is applied using reference patterns from quartz (2 different standards), kaolinite, plagioclase, K-feldspar and organic matter", message = FALSE, warning = FALSE}
+#Apply fps to the sandstone sample, adding kaolinite, feldspar and oligoclase to the process
+fit <- fps(lib = minerals,
+           smpl = soils$sandstone,
+           refs = c("QUA.1",
+                    "QUA.2",
+                    "KAO",
+                    "FEL",
+                    "OLI"),
+           std = "QUA.1",
+           align = 0.2)
+
+#plot the data to interpret the fit
+plot(fit)
+```
+
+When including all these phases, pretty much all peaks are accounted for. Once the user is satisfied that an appropriate fit has been achieved, the mineral concentrations can be extracted and interpreted by looking at two elements of the output from `fps`:
+
+- `fit$phases`
+- `fit$phases_summary`
+
+```{r}
+#returns individual contributions from each reference pattern
+fit$phases
+
+#returns summed contributions from each mineral
+fit$phases_summary
+```
+
+All of the above examples for `fps` can be further tested using the two other XRPD measurements available in the `soils` list (`soils$limestone` and `soils$granite`), each representing soils with different mineralogies.
+
+## References
