@@ -1,3 +1,23 @@
+.xrd_nnls <- function(xrd.lib, xrd.sample) {
+
+  mat <- xrd.lib$xrd
+
+  x <- nnls::nnls(as.matrix(mat), xrd.sample)
+  x <- x$x
+  names(x) <- names(data.frame(mat))
+
+  remove_these <- which(x == 0)
+
+  if(length(remove_these) > 0) {
+  x <- x[-remove_these]
+  xrd.lib[[1]] <- xrd.lib[[1]][-remove_these]
+  }
+
+  out <- list("x" = x, "xrd.lib" = xrd.lib[[1]])
+  return(out)
+
+}
+
 .fullpat <- function (par, pure_patterns, sample_pattern, obj) {
 
   #if only 1 pattern is being fitted:
@@ -74,6 +94,10 @@
 
   dfs <- data.frame(stats::aggregate(phase_percent ~ phase_name, data = df, FUN = sum),
                     stringsAsFactors = FALSE)
+
+  #Ensure that the phase concentrations are rounded to 4 dp
+  df$phase_percent <- round(df$phase_percent, 4)
+  dfs$phase_percent <- round(dfs$phase_percent, 4)
 
   out <- list("df" = df, "dfs" = dfs)
 
@@ -165,6 +189,12 @@ fps <- function(lib, ...) {
 #' @param lib A \code{powdRlib} object representing the reference library. Created using the
 #' \code{powdRlib} constructor function.
 #' @param smpl A data frame. First column is 2theta, second column is counts
+#' @param solver The optimisation routine to be used. One of \code{c("BFGS", "Nelder-Mead",
+#' "CG" or "NNLS")}. Default = \code{"BFGS"}.
+#' @param obj The objective function to minimise when "BFGS", "Nelder-Mead", or
+#' "CG" are used as the `solver` argument. One of \code{c("Delta", "R", "Rwp")}.
+#' Default = \code{"Rwp"}. See Chipera and Bish (2002) and page 247 of Bish and Post (1989)
+#' for definitions of these functions.
 #' @param refs A character string of reference pattern ID's from the specified library.
 #' The ID's must match ID's in the \code{lib$phases$phase_id} column.
 #' @param std The phase ID (e.g. "QUA.1") to be used as internal
@@ -175,11 +205,6 @@ fps <- function(lib, ...) {
 #' alignment (degrees). Default = 0.1.
 #' @param tth_fps A vector defining the minimum and maximum 2theta values to be used during
 #' full pattern summation. If not defined, then the full range is used.
-#' @param solver The optimisation routine to be used. One of \code{c("BFGS", "Nelder-Mead",
-#' "CG")}. Default = "BFGS".
-#' @param obj The objective function to minimise. One of \code{c("Delta", "R", "Rwp")}.
-#' Default = \code{"Rwp"}. See Chipera and Bish (2002) and page 247 of Bish and Post (1989)
-#' for definitions of these functions.
 #' @param ... other arguments
 #'
 #' @return a list with components:
@@ -237,23 +262,33 @@ fps <- function(lib, ...) {
 #' Eberl, D.D., 2003. User's guide to ROCKJOCK - A program for determining quantitative mineralogy from
 #' powder X-ray diffraction data. Boulder, CA.
 #' @export
-fps.powdRlib <- function(lib, smpl, refs, std,
-                tth_align, align, tth_fps, solver, obj, ...) {
+fps.powdRlib <- function(lib, smpl, solver, obj, refs, std,
+                tth_align, align, tth_fps, ...) {
 
   #Create defaults for values that aren't specified.
   if(missing(tth_align)) {
+    cat("\n-Using maximum tth range")
     tth_align <- c(min(smpl[[1]]), max(smpl[[1]]))
   }
 
   if(missing(align)) {
+    cat("\n-Using default alignment of 0.1")
     align = 0.1
   }
 
   if(missing(solver)) {
+    cat("\n-Using default solver of BFGS")
     solver = "BFGS"
   }
 
-  if(missing(obj)) {
+  if(solver == "NNLS" & missing(refs)) {
+
+    refs = lib$phases$phase_id
+
+  }
+
+  if(missing(obj) & solver %in% c("Nelder-Mead", "BFGS", "CG")) {
+    cat("\n-Using default objective function of Rwp")
     obj = "Rwp"
   }
 
@@ -267,9 +302,9 @@ fps.powdRlib <- function(lib, smpl, refs, std,
     warning("Be cautious of large 2theta shifts. These can cause issues in sample alignment.")
   }
 
-  #Make only "Nelder-Mead", "BFGS", or "CG" optional for the solver
-  if (!solver %in% c("Nelder-Mead", "BFGS", "CG")) {
-    stop("The solver argument must be one of 'BFGS', 'Nelder Mead' or 'CG'")
+  #Make only "Nelder-Mead", "BFGS", or "CG" or "NNLS" optional for the solver
+  if (!solver %in% c("Nelder-Mead", "BFGS", "CG", "NNLS")) {
+    stop("The solver argument must be one of 'BFGS', 'Nelder Mead', 'CG' or 'NNLS'")
   }
 
   #Make sure that the phase identified as the internal standard is contained within the reference library
@@ -277,24 +312,7 @@ fps.powdRlib <- function(lib, smpl, refs, std,
   stop("The phase you have specified as the internal standard is not in the reference library")
   }
 
-  ##Make sure that the defined tth arguments are within the range of the samples and reference library.
-  #if (tth[1] < min(smpl[,1])) {
-  #stop("tth[1] must exceed the minimum 2theta value of the sample")
-  #}
-  #if (tth[2] > max(smpl[,1])) {
-  #stop("tth[2] must be lower than the maximum 2theta value of the sample")
-  #}
-
-  #if (tth[1] < min(lib$tth)) {
-  #stop("tth[1] must be within the 2theta range of the reference library")
-  #}
-  #if (tth[2] > max(lib$tth)) {
-  #stop("tth[2] must be within the 2theta range of the reference library")
-  #}
-
 #subset lib according to the phases vector
-
-#keep <- which(lib$phases$phase_id %in% refs)
 
 lib$xrd <- lib$xrd[, which(lib$phases$phase_id %in% refs)]
 lib$phases <- lib$phases[which(lib$phases$phase_id %in% refs), ]
@@ -310,6 +328,7 @@ if (length(refs) == 1) {
 xrd_standard <- data.frame(tth = lib$tth, counts = lib$xrd[, which(lib$phases$phase_id == std)])
 
 #align the data
+cat("\n-Aligning sample to the internal standard")
 smpl <- .xrd_align(smpl = smpl, xrd_standard, xmin = tth_align[1],
                     xmax = tth_align[2], xshift = align)
 
@@ -335,6 +354,7 @@ if(missing(tth_fps)) {
 xrd_ref_names <- lib$phases$phase_id
 
 #Ensure that samples in the reference library are on the same scale as the sample
+cat("\n-Interpolating library to same 2theta scale as aligned sample")
 lib$xrd <- data.frame(lapply(names(lib$xrd),
                                        function(n) stats::approx(x = lib$tth,
                                                           y = unname(unlist(lib$xrd[n])),
@@ -360,6 +380,8 @@ if (is.vector(lib$xrd)) {
   names(lib$xrd) <- refs
 }
 
+if (solver %in% c("Nelder-Mead", "BFGS", "CG")) {
+
 #--------------------------------------------
 #Initial Optimisation
 #--------------------------------------------
@@ -367,6 +389,7 @@ if (is.vector(lib$xrd)) {
 x <- rep(0, ncol(lib$xrd))
 names(x) <- names(lib$xrd)
 
+cat("\n-Optimising...")
 o <- stats::optim(par = x, .fullpat,
            method = solver, pure_patterns = lib$xrd,
            sample_pattern = smpl[, 2], obj = obj)
@@ -377,29 +400,21 @@ x <- o$par
 # Remove negative parameters
 #-----------------------------------------------
 
-#setup an initial negpar that is negative so that the following while loop will
-#run until no negative parameters are found
-negpar <- -0.1
+remove_neg_out <- .remove_neg(x = x, lib = lib, smpl = smpl,
+                              solver = solver, obj = obj)
 
-while (negpar < 0) {
-  #use the most recently optimised coefficients
-  x <- o$par
-  #check for any negative parameters
-  omit <- which(x < 0)
+x <- remove_neg_out[[1]]
+lib <- remove_neg_out[[2]]
 
-  #remove the column from the library that contains the identified data
-  if (length(which(x < 0)) > 0) {
-    lib$xrd <- lib$xrd[, -omit]
-    x <- x[-omit]
+} else {
+
+  cat("\n-Applying non-negative least squares")
+  nnls_out <- .xrd_nnls(xrd.lib = lib, xrd.sample = smpl[, 2])
+
+  lib$xrd <- nnls_out$xrd.lib
+  x <- nnls_out$x
+
   }
-
-  o <- stats::optim(par = x, .fullpat,
-             method = solver, pure_patterns = lib$xrd,
-             sample_pattern = smpl[, 2], obj = obj)
-  x <- o$par
-  #identify whether any parameters are negative for the next iteration
-  negpar <- min(x)
-}
 
 #compute fitted pattern and residuals
 fitted_pattern <- apply(sweep(as.matrix(lib$xrd), 2, x, "*"), 1, sum)
@@ -407,6 +422,7 @@ fitted_pattern <- apply(sweep(as.matrix(lib$xrd), 2, x, "*"), 1, sum)
 resid_x <- smpl[, 2] - fitted_pattern
 
 #compute grouped phase concentrations
+cat("\n-Computing phase concentrations")
 min_concs <- .qminerals(x = x, xrd_lib = lib)
 
 #Extract mineral concentrations (df) and summarised mineral concentrations (dfs)
@@ -445,6 +461,7 @@ names(out) <- c("tth", "fitted", "measured", "residuals",
 
 #Define the class
 class(out) <- "powdRfps"
+cat("\n-Full pattern summation complete")
 
 return(out)
 

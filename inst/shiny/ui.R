@@ -9,38 +9,51 @@ shinyUI(
                         column(4, wellPanel(
                           h3("1. File upload"),
                           h4("XRPD data"),
-                          fileInput(inputId = "uploadXRD",
-                                    label = "Choose a .csv file containing the 2theta scale
-                                    and the count intensities of all reference patterns.",
+                          helpText("Choose a .csv file containing the 2theta scale
+                                    and the count intensities of all reference patterns."),
+                          div(style="display: inline-block;vertical-align:top; width: 300px;",
+                              fileInput(inputId = "uploadXRD",
+                                    label = NULL,
                                     multiple = FALSE,
-                                    accept = ".csv"),
+                                    accept = ".csv")),
+                          div(style="display: inline-block;vertical-align:center; width: 0px;",
+                              dropdownButton(
+                                downloadLink(outputId = "download_xrd_eg",
+                                             label = "Download an example .csv file"),
+                                circle = FALSE, status = "danger", icon = icon("question"),
+                                width = "300px", size = "sm"
+                              )),
                           h4("Phase information"),
-                          fileInput(inputId = "uploadPHASE",
-                                    label = "Upload a .csv file containing
+                          helpText("Upload a .csv file containing
                                     contains the id's, names and reference intensity ratios of
-                                    all reference patterns.",
+                                    all reference patterns."),
+                          div(style="display: inline-block;vertical-align:top; width: 300px;",
+                              fileInput(inputId = "uploadPHASE",
+                                    label = NULL,
                                     multiple = FALSE,
-                                    accept = ".csv"),
+                                    accept = ".csv")),
+                          div(style="display: inline-block;vertical-align:center; width: 0px;",
+                              dropdownButton(
+                                downloadLink(outputId = "download_phases_eg",
+                                             label = "Download an example .csv file"),
+                                circle = FALSE, status = "danger", icon = icon("question"),
+                                width = "300px", size = "sm"
+                              )),
                           tags$hr(),
-                          h3("2. Build"),
-                          actionButton("BuildLibButton", "Click to build library"),
+                          div(style="display: inline-block;vertical-align:bottom; width: 100px;",
+                              h3("2. Build")),
+                          div(style="display: inline-block;vertical-align:bottom; width: 100px;",
+                              actionButton("BuildLibButton", "Click to build library")),
                           tags$hr(),
                           h3("3. Download library"),
-                          textInput("name","Provide a name for the new library object.
+                          helpText("Provide a name for the new library object.
                                     This is what the library will be called if it is
-                                    subsequently loaded into R (can be kept as the default
-                                    'RefLib'):",
+                                   subsequently loaded into R (can be kept as the default
+                                   'RefLib'):"),
+                          textInput("name", label = NULL,
                                     "RefLib"),
                           downloadButton(outputId = "download_lib",
-                                         label = "Download library as .Rdata binary file"),
-                          tags$hr(),
-                          h3("Example files"),
-                          downloadLink(outputId = "download_xrd_eg",
-                                       label = "Download an example .csv file of the XRPD data"),
-                          tags$br(),
-                          downloadLink(outputId = "download_phases_eg",
-                                       label = "Download an example .csv file of the
-                                       phase information")
+                                         label = "Download library as .Rdata binary file")
                         )),
                         column(8, wellPanel(
                           h3("Phases in your reference library"),
@@ -56,16 +69,18 @@ shinyUI(
              tabPanel("Reference Library Viewer",
                       fluidRow(
                         column(6, wellPanel(
-                          fileInput(inputId = "loadLIB_plotter",
-                                    label = "Choose a .Rdata reference library to load. Must be
+                          helpText("Choose a .Rdata reference library to load. Must be
                                     a powdRlib object created using either the powdRlib function,
-                                    or via the Reference Library Builder in this application.",
+                                    or via the Reference Library Builder in this application."),
+                          fileInput(inputId = "loadLIB_plotter",
+                                    label = NULL,
                                     multiple = FALSE,
                                     accept = ".Rdata")
                         )),
                         column(6, wellPanel(
+                          helpText("Choose phases from the library to plot."),
                           selectInput(inputId = "selectPHASES_plotter",
-                                      label = "Choose phases from the library to plot.",
+                                      label = NULL,
                                       choices = c("Please upload a reference library"),
                                       selected = "Please upload a reference library",
                                       multiple = TRUE,
@@ -79,65 +94,128 @@ shinyUI(
                       )
              ),
 
+             #################################
+             ## TAB 3: Background Fitting
+             #################################
+             tabPanel("Background fitting",
+                      fluidRow(
+                        column(3, wellPanel(
+                          h3("1. Load a sample"),
+                          helpText("File must be .xy format (space separated)"),
+                          fileInput(inputId = "loadXYbkg",
+                                    label = NULL,
+                                    multiple = FALSE,
+                                    accept = c(".xy", ".XY")),
+                          h3("2. Background parameters"),
+                          helpText("lamda: 2nd derivative penalty for primary smoothing (default = 0.5)"),
+                          sliderInput("bkg_lambda",
+                                      label = NULL,
+                                      min = 0.1, max = 10,
+                                      value = 0.5, step = 0.1),
+                          helpText("hwi: half width of local windows (default = 25)"),
+                          sliderInput("bkg_hwi",
+                                      label = NULL,
+                                      min = 10, max = 100,
+                                      value = 25, step = 1),
+                          helpText("it: number of iterations in suppression loop (default = 50)"),
+                          sliderInput("bkg_it",
+                                      label = NULL,
+                                      min = 1, max = 200,
+                                      value = 50, step = 1),
+                          helpText("int: number of buckets to divide the data into (default = 1000)"),
+                          sliderInput("bkg_int",
+                                      label = NULL,
+                                      min = 10, max = 2000,
+                                      value = 1000, step = 10)
+                          )),
+                        column(9, wellPanel(
+                          div(style="display: inline-block;vertical-align:top; width: 200px;",
+                              h4("Fitted background plot")),
+                          div(style="display: inline-block;vertical-align:top; width: 300px;",
+                              dropdownButton(
+                                sliderInput("bkg_x", "adjust the x-axis",
+                                            min = 4, max = 70,
+                                            value = c(4,70), step = 1),
+                                sliderInput("bkg_y", "adjust the y-axis",
+                                            min = 0, max = 10000,
+                                            value = c(0,5000), step = 1),
+                                circle = FALSE, status = "danger", icon = icon("sliders"),
+                                width = "400px", size = "sm",
+                                tooltip = tooltipOptions(title = "Click to adjust graph axes")
+                              )),
+                          plotOutput("bkg_plot", width = "100%", height = "600px")
+                          ))
+                        ) # end fluidRow
+             ),
 
              #################################
-             ## TAB 3: Full pattern summation
+             ## TAB 4: Full pattern summation
              #################################
              tabPanel("Full pattern summation",
                       fluidRow(
                         column(3, wellPanel(
                           h3("1. Load a sample for quantification"),
+                          helpText("Must be .xy format (space separated)"),
+                          div(style="display: inline-block;vertical-align:top; width: 225px;",
                           fileInput(inputId = "loadXY",
-                                    label = "File must be .xy format (space separated)",
+                                    label = NULL,
                                     multiple = FALSE,
-                                    accept = c(".xy", ".XY")),
-                          h4("Example soil .xy files"),
-                          downloadLink(outputId = "download_soil_sand",
-                                       label = "Sandstone_soil.xy  "),
-                          downloadLink(outputId = "download_soil_lime",
-                                       label = "Limestone_soil.xy  "),
-                          downloadLink(outputId = "download_soil_granite",
-                                       label = "Granite_soil.xy  "),
-                          tags$hr(),
+                                    accept = c(".xy", ".XY"))),
+                          div(style="display: inline-block;vertical-align:center; width: 0px;",
+                              dropdownButton(
+                                downloadLink(outputId = "download_soil_sand",
+                                             label = "Sandstone_example.xy  "),
+                                downloadLink(outputId = "download_soil_lime",
+                                             label = "Limestone_example.xy  "),
+                                downloadLink(outputId = "download_soil_granite",
+                                             label = "Granite_example.xy  "),
+                                circle = FALSE, status = "danger", icon = icon("question"),
+                                width = "300px", size = "sm"
+                              )),
                           h3("2. Load a reference library"),
-                          fileInput(inputId = "loadLIB",
-                                    label = "Choose a .Rdata reference library to load",
+                          helpText("Must be a .Rdata powdRlib object"),
+                          div(style="display: inline-block;vertical-align:top; width: 225px;",
+                              fileInput(inputId = "loadLIB",
+                                    label = NULL,
                                     multiple = FALSE,
-                                    accept = ".Rdata"),
-                          h4("Example reference library"),
-                          downloadLink(outputId = "download_example_ref",
-                                       label = "example_library.Rdata"),
+                                    accept = ".Rdata")),
+                          div(style="display: inline-block;vertical-align:center; width: 0px;",
+                              dropdownButton(
+                            downloadLink(outputId = "download_example_ref",
+                                         label = "example_powdRlib.Rdata"),
+                            circle = FALSE, status = "danger", icon = icon("question"),
+                            width = "300px", size = "sm"
+                          )),
+                          h3("3. Select a solver"),
+                          helpText("Choose the optimisation routine"),
+                          selectInput(inputId = "selectSolver",
+                                      label = NULL,
+                                      choices = c("BFGS", "Nelder-Mead", "CG", "NNLS")),
+                          uiOutput("selectOBJui"),
                           tags$hr(),
-                          h3("3. Select phases"),
-                          selectInput(inputId = "selectPHASES",
-                                      label = "Choose the crystalline phases to use during fitting.
-                                      Use ctrl or shift to select multiple phases.",
-                                      choices = c(""),
-                                      multiple = TRUE,
-                                      selectize = TRUE),
+                          h3("4. Select phases"),
+                          uiOutput("selectPHASESui"),
+                          helpText("Choose an internal standard for peak alignment."),
                           selectInput(inputId = "selectINT",
-                                      label = "Choose reference phase to use for peak alignment.",
+                                      label = NULL,
                                       choices = c("")),
                           tags$hr(),
-                          h3("4. Adjust fit parameters"),
-                          tags$hr(),
-                          sliderInput("tth", withMathJax("Adjust the 2\\(\\theta\\) range for
-                                                         full pattern summation"),
-                                      min = 2, max = 75,
-                                      value = c(0, 100), step = 0.1),
-                          sliderInput("align", "Adjust the alignment parameter", min = 0.01,
-                                      max = 0.2,
+                          h3("5. Adjust fit parameters"),
+                          helpText("Adjust the alignment parameter"),
+                          sliderInput("align", label = NULL, min = 0.01,
+                                      max = 0.5,
                                       value = c(0.1)),
-                          selectInput(inputId = "selectSolver",
-                                      label = "Choose the optimisation routine",
-                                      choices = c("BFGS", "Nelder-Mead", "CG")),
-                          selectInput(inputId = "selectOBJ",
-                                      label = "Choose the objective function to minimise",
-                                      choices = c("Rwp", "R", "Delta"))
+                          helpText(withMathJax("Adjust the 2\\(\\theta\\) range for
+                                                         full pattern summation")),
+                          sliderInput("tth", label = NULL,
+                                      min = 2, max = 75,
+                                      value = c(0, 100), step = 0.1)
                         )),
                         column(9, wellPanel(
-                          h3("5. Full pattern summation"),
-                          actionButton("goButton", "Click to start computation"),
+                          div(style="display: inline-block;vertical-align:bottom; width: 300px;",
+                              h3("6. Full pattern summation")),
+                          div(style="display: inline-block;vertical-align:bottom; width: 300px;",
+                              actionButton("goButton", "Click to start computation")),
                           tags$hr(),
                           h5("Once computation has finished, the results will be
                              tabulated and plotted below. Results can then be exported
@@ -147,19 +225,151 @@ shinyUI(
                           tags$hr(),
                           plotlyOutput("line", width = "auto", height = 1000),
                           tags$hr(),
-                          h3("6. Download computed fit"),
+                          h3("7. Download computed fit"),
                           downloadButton(outputId = "download_fit",
                                          label = "Download fitted patterns (.csv)"),
                           downloadButton(outputId = "download_mins",
                                          label = "Download phase concentrations (.csv)"),
                           downloadButton(outputId = "download_fps",
-                                         label = "Download in powdRfps format (.Rdata)")
+                                         label = "Download powdRfps object (.Rdata)")
                           ))
                         ) # end fluidRow
                         ),
 
+
              #################################
-             ## TAB 4: RESULTS VIEWER
+             ## TAB 5:  Automated Full pattern summation
+             #################################
+             tabPanel("Automated full pattern summation",
+                      fluidRow(
+                        column(3, wellPanel(
+                          h3("1. Load a sample for quantification"),
+                          helpText("Must be .xy format (space separated)"),
+                          div(style="display: inline-block;vertical-align:top; width: 225px;",
+                              fileInput(inputId = "loadXYafps",
+                                        label = NULL,
+                                        multiple = FALSE,
+                                        accept = c(".xy", ".XY"))),
+                          div(style="display: inline-block;vertical-align:center; width: 0px;",
+                              dropdownButton(
+                                downloadLink(outputId = "download_soil_sand_afps",
+                                             label = "Sandstone_example.xy  "),
+                                downloadLink(outputId = "download_soil_lime_afps",
+                                             label = "Limestone_example.xy  "),
+                                downloadLink(outputId = "download_soil_granite_afps",
+                                             label = "Granite_example.xy  "),
+                                circle = FALSE, status = "danger", icon = icon("question"),
+                                width = "300px", size = "sm"
+                              )),
+                          h3("2. Load a reference library"),
+                          helpText("Must be a .Rdata powdRlib object"),
+                          div(style="display: inline-block;vertical-align:top; width: 225px;",
+                              fileInput(inputId = "loadLIBafps",
+                                        label = NULL,
+                                        multiple = FALSE,
+                                        accept = ".Rdata")),
+                          div(style="display: inline-block;vertical-align:center; width: 0px;",
+                              dropdownButton(
+                                downloadLink(outputId = "download_example_ref_afps",
+                                             label = "example_powdRlib.Rdata"),
+                                circle = FALSE, status = "danger", icon = icon("question"),
+                                width = "300px", size = "sm"
+                              )),
+                          h3("3. Select a solver"),
+                          helpText("Choose the optimisation routine"),
+                          selectInput(inputId = "selectSolver_afps",
+                                      label = NULL,
+                                      choices = c("BFGS", "Nelder-Mead", "CG")),
+                          selectInput(inputId = "selectOBJ_afps",
+                                      label = NULL,
+                                      choices = c("Rwp", "R", "Delta")),
+                          tags$hr(),
+                          h3("4. Select phases"),
+                          helpText("Choose an internal standard for peak alignment."),
+                          selectInput(inputId = "selectINT_afps",
+                                      label = NULL,
+                                      choices = c("")),
+                          helpText("Choose which (if any) phases should be treated as amorphous."),
+                          selectInput(inputId = "selectAMORPH_afps",
+                                      label = NULL,
+                                      choices = c(""),
+                                      multiple = TRUE,
+                                      selectize = TRUE),
+                          tags$hr(),
+                          h3("5. Adjust fit parameters"),
+                          helpText("Adjust the alignment parameter"),
+                          sliderInput("align_afps", label = NULL, min = 0.01,
+                                      max = 0.5,
+                                      value = 0.1),
+                          helpText("Adjust the shifting parameter"),
+                          sliderInput("shift_afps", label = NULL, min = 0,
+                                      max = 0.1,
+                                      value = 0),
+                          helpText(withMathJax("Adjust the 2\\(\\theta\\) range for
+                                               full pattern summation")),
+                          sliderInput("tth_afps", label = NULL,
+                                      min = 2, max = 75,
+                                      value = c(0, 100), step = 0.1),
+                          helpText("Tune the limit of detection parameter for crystalline phases (lower values
+                                   = lower limits of detection)"),
+                          sliderInput("lod_afps", label = NULL,
+                                      min = 0.01, max = 5,
+                                      value = 0.3, step = 0.1),
+                          helpText("Remove amorphous phases below this limit (percent)"),
+                          sliderInput("amorph_lod_afps", label = NULL,
+                                      min = 0, max = 100,
+                                      value = 2, step = 1),
+                          div(style="display: inline-block;vertical-align:center; width: 300px;",
+                              h3("6. Background parameters")),
+                          div(style="display: inline-block;vertical-align:center; width: 0px;",
+                              dropdownButton(
+                                helpText("Tune the background parameters"),
+                                sliderInput("lambda", label = "lambda",
+                                            min = 0.1, max = 10,
+                                            value = 0.5, step = 0.1),
+                                sliderInput("hwi", label = "hwi",
+                                            min = 10, max = 100,
+                                            value = 25, step = 1),
+                                sliderInput("it", label = "it",
+                                            min = 2, max = 75,
+                                            value = 50, step = 1),
+                                sliderInput("int", label = "int",
+                                            min = 10, max = 2000,
+                                            value = 1000, step = 10),
+                                circle = FALSE, status = "danger", icon = icon("sliders"),
+                                width = "300px", size = "sm"
+                              )),
+                          helpText("Use the dropdown box to tune the background parameters. The
+                                   default setting are usually adequate.")
+                          )),
+                        column(9, wellPanel(
+                          div(style="display: inline-block;vertical-align:bottom; width: 400px;",
+                              h3("7. Automated full pattern summation")),
+                          div(style="display: inline-block;vertical-align:bottom; width: 300px;",
+                              actionButton("goButton_afps", "Click to start computation")),
+                          tags$hr(),
+                          h5("Once computation has finished, the results will be
+                             tabulated and plotted below. Results can then be exported
+                             using download buttons at the bottom of this page."),
+                          tags$hr(),
+                          dataTableOutput("contents_afps"),
+                          tags$hr(),
+                          plotlyOutput("line_afps", width = "auto", height = 1000),
+                          tags$hr(),
+                          h3("8. Download computed fit"),
+                          downloadButton(outputId = "download_fit_afps",
+                                         label = "Download fitted patterns (.csv)"),
+                          downloadButton(outputId = "download_mins_afps",
+                                         label = "Download phase concentrations (.csv)"),
+                          downloadButton(outputId = "download_afps",
+                                         label = "Download powdRafps object (.Rdata)")
+                        ))
+             ) # end fluidRow
+             ),
+
+
+             #################################
+             ## TAB 6: RESULTS VIEWER
              #################################
 
              tabPanel("Results Viewer",
@@ -167,17 +377,22 @@ shinyUI(
                       fluidRow(
 
                         column(6, wellPanel(
+                          helpText("Choose a .Rdata file to load. Must be a
+                                    powdRfps or powdRafps object created using the fps() or
+                                    afps() function. These objects can also be saved from the
+                                    'Full pattern summation' or 'Automated full pattern summation'
+                                    tabs of this application."),
                           fileInput(inputId = "loadRESULTS",
-                                    label = "Choose a .Rdata results object to load. Must be a
-                                    powdRfps object created using either the fps function, or
-                                    exported from the full pattern summation tab of this
-                                    application.",
+                                    label = NULL,
                                     multiple = FALSE,
                                     accept = ".Rdata")
                         )),
                         column(6, wellPanel(
+                          helpText("Choose how the results are tabulated. If 'Grouped phases' is selected,
+                                   the mineralogy is summarised according to the phase_name column, e.g.
+                                   if more than one quartz pattern is used, these will be summed together."),
                           selectInput(inputId = "selectTABLE_viewer",
-                                      label = "Choose how the results are tabulated",
+                                      label = NULL,
                                       choices = c("All phases", "Grouped phases"))
                         ))
                       ), # end fluidRow
