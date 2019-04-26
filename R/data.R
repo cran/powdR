@@ -1,6 +1,6 @@
 #' Example soil XRPD data
 #'
-#' 3 soil samples from different parent materials measured by XRPD
+#' 3 soil samples from different parent materials measured by XRPD (Cu K-alpha radiation)
 #'
 #' @format A list of 3 dataframes (named according to rock type),
 #' with each dataframe containing two columns of:
@@ -13,8 +13,9 @@
 #' An example powdRlib reference library
 #'
 #' This \code{powdRlib} object, built using the \code{powdRlib} constructor function,
-#' contains a range of measured XRPD data along with their reference intensity ratios.
-#' The library can be used with the \code{soils} example data for full pattern summation.
+#' contains a range of measured XRPD data (Cu K-alpha radiation) along with their reference
+#' intensity ratios. The library can be used with the \code{soils} example data for full
+#' pattern summation.
 #'
 #' @format A list of 3
 #' \describe{
@@ -57,3 +58,59 @@
 #' of each reference pattern.
 #' }
 "minerals_phases"
+
+#' RockJock reference library
+#'
+#' A \code{powdRlib} object of 168 pure reference patterns from the RockJock
+#' library (Cu K-alpha radiation) along with reference intensity ratios.Can be
+#' used with the \code{fps()} and \code{afps()} functions for quantitative
+#' analysis. Example mixtures for testing the \code{rockjock} library with known
+#' concentrations are available in the \code{rockjock_mixtures} data. See
+#' \code{?rockjock_mixtures}.
+#'
+#' @format A list of 3 components
+#' \describe{
+#' \item{xrd}{A dataframe of all xrd data (counts only). Column names denote the
+#' reference sample}
+#' \item{tth}{A vector of 2theta intervals of all measurements in the library}
+#' \item{phases}{A dataframe the phase ID's, names and reference intensity
+#' ratios (RIR)}
+#' }
+#'
+#' @author Dennis Eberl
+#' @references \url{https://pubs.er.usgs.gov/publication/ofr200378}
+"rockjock"
+
+#' RockJock synthetic mixtures
+#'
+#' A list containing 8 XRPD measurements (Cu K-alpha radiation) of synthetic mixtures
+#' that can be used to assess accuracy of quantitative analysis from the \code{fps()}
+#' and \code{afps()} functions. The mixtures contain various amounts of quartz (QUARTZ
+#' standard in of the \code{rockjock} library), K-feldspar (ORDERED_MICROCLINE),
+#' plagioclase (LABRADORITE), kaolinite (KAOLINITE_DRY_BRANCH), dioctahedral smectite
+#' (MONTMORILLIONITE_WYO), illite (ILLITE_1M_RM30) and corundum (CORUNDUM).
+#'
+#' @format A list of 8 components, each comprised of two columns. Column \code{tth} specifies
+#' the 2theta axis and \code{counts} specifies the count intensities
+#' \describe{
+#' \item{Mix1}{Contains: 4 \% K-feldspar, 20 \% plagioclase, 12 \% kaolinite, 36 \% dioctahedral
+#' smectite, 8 \% illite and 20 \% corundum.}
+#' \item{Mix2}{Contains: 4 \% quartz, 8 \% K-feldspar, 36 \% plagioclase, 20 \% kaolinite,
+#' 12 \% illite and 20 \% corundum.}
+#' \item{Mix3}{Contains: 8 \% quartz, 12 \% K-feldspar, 36 \% kaolinite, 4 \% dioctahedral
+#' smectite, 20 \% illite and 20 \% corundum.}
+#' \item{Mix4}{Contains: 12 \% quartz, 20 \% K-feldspar, 4 \% plagioclase, 8 \% dioctahedral
+#' smectite, 36 \% illite and 20 \% corundum.}
+#' \item{Mix5}{Contains: 20 \% quartz, 36 \% K-feldspar, 8 \% plagioclase, 4 \% kaolinite,
+#' 12 \% dioctahedral smectite and 20 \% corundum.}
+#' \item{Mix6}{Contains: 36 \% quartz, 12 \% plagioclase, 8 \% kaolinite, 20 \% dioctahedral
+#' smectite, 4 \% illite and 20 \% corundum.}
+#' \item{Mix7}{Contains: 8 \% K-feldspar, 40 \% plagioclase, 4 \% kaolinite, 12 \% dioctahedral
+#' smectite, 16 \% illite and 20 \% corundum.}
+#' \item{Mix8}{Contains: 8 \% quartz, 4 \% K-feldspar, 4 \% plagioclase, 24 \% dioctahedral
+#' smectite, 40 \% illite and 20 \% corundum.}
+#' }
+#'
+#' @author Dennis Eberl
+#' @references \url{https://pubs.er.usgs.gov/publication/ofr200378}
+"rockjock_mixtures"

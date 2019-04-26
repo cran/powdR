@@ -7,7 +7,7 @@
 #'
 #' Applies automated full pattern summation to an XRPD
 #' measurement to quantify phase concentrations. Requires a \code{powdRlib} library of
-#' reference patterns with pre-measured reference intensity ratios in order to derive
+#' reference patterns with reference intensity ratios in order to derive
 #' mineral concentrations.
 #'
 #' @param lib A \code{powdRlib} object representing the reference library. Created using the
@@ -18,14 +18,14 @@
 #' \item{tth}{a vector of the 2theta scale of the fitted data}
 #' \item{fitted}{a vector of the fitted XRPD pattern}
 #' \item{measured}{a vector of the original XRPD measurement (aligned)}
-#' \item{background}{a vector of the fitted background used to estimate limits of detection}
 #' \item{residuals}{a vector of the residuals (fitted vs measured)}
 #' \item{phases}{a dataframe of the phases used to produce the fitted pattern}
-#' \item{phases_summary}{the phases dataframe grouped by phase_name and summarised (sum)}
+#' \item{phases_grouped}{the phases dataframe grouped by phase_name and summed}
 #' \item{rwp}{the Rwp of the fitted vs measured pattern}
 #' \item{weighted_pure_patterns}{a dataframe of reference patterns used to produce the fitted pattern.
 #' All patterns have been weighted according to the coefficients used in the fit}
 #' \item{coefficients}{a named vector of coefficients used to produce the fitted pattern}
+#' \item{inputs}{a list of input arguments used in the function call}
 #'
 #' @examples
 #' #Load the minerals library
@@ -34,27 +34,62 @@
 #' # Load the soils data
 #' data(soils)
 #'
-#' #Since the reference library is relatively small,
-#' #the whole library can be used at once to get an
-#' #estimate of the phases within each sample.
 #' \dontrun{
 #' afps_sand <-  afps(lib = minerals,
 #'                  smpl = soils$sandstone,
-#'                  std = "QUA.1",
+#'                  std = "QUA.2",
+#'                  align = 0.2,
+#'                  lod = 0.2,
 #'                  amorphous = "ORG",
-#'                  align = 0.2)
+#'                  amorphous_lod = 1)
 #'
 #' afps_lime <- afps(lib = minerals,
 #'                 smpl = soils$limestone,
-#'                 std = "QUA.1",
+#'                 std = "QUA.2",
+#'                 align = 0.2,
+#'                 lod = 0.2,
 #'                 amorphous = "ORG",
-#'                 align = 0.2)
+#'                 amorphous_lod = 1)
 #'
 #' afps_granite <- afps(lib = minerals,
 #'                    smpl = soils$granite,
-#'                    std = "QUA.1",
+#'                    std = "QUA.2",
+#'                    align = 0.2,
+#'                    lod = 0.2,
 #'                    amorphous = "ORG",
-#'                    align = 0.2)
+#'                    amorphous_lod = 1)
+#'
+#' #Alternatively run all 3 at once using lapply
+#'
+#' afps_soils <- lapply(soils, afps,
+#'                      lib = minerals,
+#'                      std = "QUA.2",
+#'                      align = 0.2,
+#'                      lod = 0.2,
+#'                      amorphous = "ORG",
+#'                      amorphous_lod = 1)
+#'
+#' #Automated quantification using the rockjock library
+#'
+#' data(rockjock)
+#' data(rockjock_mixtures)
+#'
+#' #This takes a few minutes to run
+#' rockjock_a1 <- afps(lib = rockjock,
+#'                     smpl = rockjock_mixtures$Mix1,
+#'                     std = "CORUNDUM",
+#'                     align = 0.3,
+#'                     lod = 1)
+#'
+#' #Quantifying the same sample but defining the internal standard
+#' #concentration (also takes a few minutes to run):
+#' rockjock_a1s <- afps(lib = rockjock,
+#'                      smpl = rockjock_mixtures$Mix1,
+#'                      std = "CORUNDUM",
+#'                      std_conc = 20,
+#'                      align = 0.3,
+#'                      lod = 1)
+#'
 #' }
 #' @references
 #' Chipera, S.J., Bish, D.L., 2013. Fitting Full X-Ray Diffraction Patterns for Quantitative Analysis:
@@ -65,7 +100,7 @@
 #' diffraction using measured and calculated patterns. J. Appl. Crystallogr. 35, 744-749.
 #' doi:10.1107/S0021889802017405
 #'
-#' Eberl, D.D., 2003. User's guide to ROCKJOCK - A program for determining quantitative mineralogy from
+#' Eberl, D.D., 2003. User's guide to RockJock - A program for determining quantitative mineralogy from
 #' powder X-ray diffraction data. Boulder, CA.
 #' @export
 afps <- function(lib, ...) {
@@ -80,35 +115,47 @@ afps <- function(lib, ...) {
 #'
 #' Applies automated full pattern summation to an XRPD
 #' sample to quantify phase concentrations. Requires a \code{powdRlib} library of reference
-#' patterns with pre-measured reference intensity ratios in order to derive mineral
+#' patterns with reference intensity ratios in order to derive mineral
 #' concentrations.
 #'
 #' @param lib A \code{powdRlib} object representing the reference library. Created using the
 #' \code{powdRlib} constructor function.
 #' @param smpl A data frame. First column is 2theta, second column is counts
+#' @param harmonise logical parameter defining whether to harmonise the \code{lib} and \code{smpl}.
+#' Default = \code{TRUE}. Harmonises to the intersecting 2theta range at the coarsest resolution
+#' available.
 #' @param solver The optimisation routine to be used. One of \code{c("BFGS", "Nelder-Mead",
-#' "CG")}. Default = \code{"BFGS"}.
+#' "CG" or "L-BFGS-B")}. Default = \code{"BFGS"}.
 #' @param obj The objective function to minimise. One of \code{c("Delta", "R", "Rwp")}.
 #' Default = \code{"Rwp"}. See Chipera and Bish (2002) and page 247 of Bish and Post (1989)
 #' for definitions of these functions.
 #' @param std The phase ID (e.g. "QUA.1") to be used as internal
 #' standard. Must match an ID provided in the \code{phases} parameter.
-#' @param amorphous A character string of any phase id's that should be treated as amorphous. Each must
-#' match a phase_id in the phases table of `lib`.
+#' @param force An optional string of phase ID's specifying which phases should not be forced to
+#' remain throughout the automated full pattern summation.
+#' @param std_conc The concentration of the internal standard (if known) in weight percent. If
+#' unknown then use \code{std_conc = NA}, in which case it will be assumed that all phases sum
+#' to 100 percent (default).
 #' @param tth_align A vector defining the minimum and maximum 2theta values to be used during
 #' alignment. If not defined, then the full range is used.
 #' @param align The maximum shift that is allowed during initial 2theta
 #' alignment (degrees). Default = 0.1.
+#' @param manual_align A logical operator denoting whether to optimise the alignment within the
+#' negative/position 2theta range defined in the \code{align} argument, or to use the specified
+#' value of the \code{align} argument for alignment of the sample to the standards. Default
+#' = \code{FALSE}, i.e. alignment is optimised.
 #' @param shift The maximum shift (degrees 2theta) that is allowed during the grid search phases selected
 #' from the non-negative least squares. Default = 0.05).
+#' @param shift_res A single integer defining the increase in resolution used during grid search shifting. Higher
+#' values facilitate finer shifts at the expense of longer computation. Default = 4.
 #' @param tth_fps A vector defining the minimum and maximum 2theta values to be used during
 #' automated full pattern summation. If not defined, then the full range is used.
-#' @param background a list of parameters used to fit a background to the data. Takes the form
-#' \code{list(lambda, hwi, it , int)}. If missing, the default used is
-#' \code{list(lambda = 0.5, hwi = 25, it = 50, int = round(nrow(smpl)/4, 0)).} To tune these parameters
-#' please see the \code{function}, or the background fitting tab of the \code{run_powdR} shiny app.
-#' @param lod Optional parameter used to tune the lower limit of detection computation.
-#' Must be greater than 0. Default = 0.3. Lower values represent lower detection limits.
+#' @param lod Optional parameter used to define the limit of detection (in weight percent) of the internal standard
+#' (i.e. the phase provided in the \code{std} argument). The \code{lod} value is used to estimate the lod of other
+#' phases during the fitting process and hence remove reference patterns that are considered below detection limit.
+#' Default = 0.1. If \code{lod = 0} then limits of detection are not computed.
+#' @param amorphous A character string of any phase id's that should be treated as amorphous. Each must
+#' match a phase_id in the phases table of `lib`.
 #' @param amorphous_lod Optional parameter used to exclude amorphous phases if they are below this
 #' specified limit (percent). Must be between 0 and 100. Default = 0.
 #' @param ... other arguments
@@ -117,14 +164,14 @@ afps <- function(lib, ...) {
 #' \item{tth}{a vector of the 2theta scale of the fitted data}
 #' \item{fitted}{a vector of the fitted XRPD pattern}
 #' \item{measured}{a vector of the original XRPD measurement (aligned)}
-#' \item{background}{a vector of the fitted background used to estimate limits of detection}
 #' \item{residuals}{a vector of the residuals (fitted vs measured)}
 #' \item{phases}{a dataframe of the phases used to produce the fitted pattern}
-#' \item{phases_summary}{the phases dataframe grouped by phase_name and summarised (sum)}
+#' \item{phases_grouped}{the phases dataframe grouped by phase_name and summed}
 #' \item{rwp}{the Rwp of the fitted vs measured pattern}
 #' \item{weighted_pure_patterns}{a dataframe of reference patterns used to produce the fitted pattern.
 #' All patterns have been weighted according to the coefficients used in the fit}
 #' \item{coefficients}{a named vector of coefficients used to produce the fitted pattern}
+#' \item{inputs}{a list of input arguments used in the function call}
 #'
 #' @examples
 #' #Load the minerals library
@@ -133,27 +180,62 @@ afps <- function(lib, ...) {
 #' # Load the soils data
 #' data(soils)
 #'
-#' #Since the reference library is relatively small,
-#' #the whole library can be used at once to get an
-#' #estimate of the phases within each sample.
 #' \dontrun{
 #' afps_sand <-  afps(lib = minerals,
 #'                  smpl = soils$sandstone,
-#'                  std = "QUA.1",
+#'                  std = "QUA.2",
+#'                  align = 0.2,
+#'                  lod = 0.2,
 #'                  amorphous = "ORG",
-#'                  align = 0.2)
+#'                  amorphous_lod = 1)
 #'
 #' afps_lime <- afps(lib = minerals,
 #'                 smpl = soils$limestone,
-#'                 std = "QUA.1",
+#'                 std = "QUA.2",
+#'                 align = 0.2,
+#'                 lod = 0.2,
 #'                 amorphous = "ORG",
-#'                 align = 0.2)
+#'                 amorphous_lod = 1)
 #'
 #' afps_granite <- afps(lib = minerals,
 #'                    smpl = soils$granite,
-#'                    std = "QUA.1",
+#'                    std = "QUA.2",
+#'                    align = 0.2,
+#'                    lod = 0.2,
 #'                    amorphous = "ORG",
-#'                    align = 0.2)
+#'                    amorphous_lod = 1)
+#'
+#' #Alternatively run all 3 at once using lapply
+#'
+#' afps_soils <- lapply(soils, afps,
+#'                      lib = minerals,
+#'                      std = "QUA.2",
+#'                      align = 0.2,
+#'                      lod = 0.2,
+#'                      amorphous = "ORG",
+#'                      amorphous_lod = 1)
+#'
+#' #Automated quantification using the rockjock library
+#'
+#' data(rockjock)
+#' data(rockjock_mixtures)
+#'
+#' #This takes a few minutes to run
+#' rockjock_a1 <- afps(lib = rockjock,
+#'                     smpl = rockjock_mixtures$Mix1,
+#'                     std = "CORUNDUM",
+#'                     align = 0.3,
+#'                     lod = 1)
+#'
+#' #Quantifying the same sample but defining the internal standard
+#' #concentration (also takes a few minutes to run):
+#' rockjock_a1s <- afps(lib = rockjock,
+#'                      smpl = rockjock_mixtures$Mix1,
+#'                      std = "CORUNDUM",
+#'                      std_conc = 20,
+#'                      align = 0.3,
+#'                      lod = 1)
+#'
 #' }
 #' @references
 #' Bish, D.L., Post, J.E., 1989. Modern powder diffraction. Mineralogical Society of America.
@@ -166,90 +248,170 @@ afps <- function(lib, ...) {
 #' diffraction using measured and calculated patterns. J. Appl. Crystallogr. 35, 744-749.
 #' doi:10.1107/S0021889802017405
 #'
-#' Eberl, D.D., 2003. User's guide to ROCKJOCK - A program for determining quantitative mineralogy from
+#' Eberl, D.D., 2003. User's guide to RockJock - A program for determining quantitative mineralogy from
 #' powder X-ray diffraction data. Boulder, CA.
 #' @export
-afps.powdRlib <- function(lib, smpl, solver, obj, std, amorphous,
-                         tth_align, align, shift, tth_fps, background, lod,
-                         amorphous_lod, ...) {
+afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, std, force, std_conc,
+                         tth_align, align, manual_align, shift, shift_res, tth_fps, lod,
+                         amorphous, amorphous_lod, ...) {
 
+  if (missing(force)) {
+
+    force <- c()
+
+  }
+
+  if (missing(harmonise)) {
+
+    harmonise <- TRUE
+
+  }
+
+  if (!is.logical(harmonise)) {
+
+    stop("The harmonise argument must be logical")
+
+  }
+
+  if (harmonise == FALSE & !identical(lib$tth, smpl[[1]])) {
+
+    stop("The 2theta scale of the library and sample do not match. Try
+         setting the harmonise argument to TRUE")
+
+  }
+
+  #If amorphous is misssing then set it to an empty vector
   if(missing(amorphous)) {
-    cat("\n-No amorphous phases identified")
+
     amorphous = c()
   }
 
+  if (missing(std_conc)) {
+
+    std_conc <- NA
+
+  }
+
+  if (!(is.numeric(std_conc) | is.na(std_conc))) {
+
+    stop("\n-The std_conc argument must either be NA or a numeric value greater than 0 and less than 100.")
+
+  }
+
+  if (is.numeric(std_conc)) {
+
+    if (missing(std)) {
+
+      stop("\n-Please define the std argument")
+
+    }
+
+    if(std_conc <= 0 | std_conc >= 100) {
+
+      stop("\n-The std_conc argument must either be NA or a numeric value greater than 0 and less than 100.")
+
+    }
+
+  }
+
+  #If tth_align is missing then use the maximum tth range of the sample
   if(missing(tth_align)) {
-    cat("\n-Using maximum tth range")
+
     tth_align = c(min(smpl[[1]]), max(smpl[[1]]))
   }
 
+  #If align is missing then set it to default
   if(missing(align)) {
-    cat("\n-Using default alignment of 0.1")
+
     align = 0.1
   }
 
-  if(missing(shift)) {
-    cat("\n-Using default shift of 0.05")
-    shift = 0.05
+  if(missing(manual_align)) {
+
+    manual_align <- FALSE
+
   }
 
+  if(!is.logical(manual_align)) {
+
+    stop("The manual_align argument must be logical")
+
+  }
+
+  #If solver is missing then set it to BFGS
   if(missing(solver)) {
-    cat("\n-Using default solver of 'BFGS'")
+
     solver = "BFGS"
   }
 
-  if(missing(obj) & solver %in% c("Nelder-Mead", "BFGS", "CG")) {
-    cat("\n-Using default objective function of 'Rwp'")
+  #If a solver other than NNLS is being used but the objective function
+  #not defined, then used Rwp
+  if(missing(obj) & solver %in% c("Nelder-Mead", "BFGS", "CG", "L-BFGS-B")) {
+
     obj = "Rwp"
   }
 
-  if(missing(lod)) {
-    cat("\n-Using default lod of 0.3")
-    lod = 0.3
+  #If shift is missing then set it to default
+  if(missing(shift)) {
+
+    shift = 0
+
   }
 
+  #If shift_res is missing then set it to default
+  if(missing(shift_res)) {
+
+    shift_res = 4
+  }
+
+  #If lod is missing then set it to a default of 1
+  if(missing(lod)) {
+
+    lod = 0.1
+  }
+
+  #If amorphous_lod is missing, set it to 0
   if(missing(amorphous_lod)) {
-    cat("\n-Using default amorphous_lod of 0")
+
     amorphous_lod = 0
   }
 
-  if(missing(background)) {
-
-    background <- list(lambda = 0.5,
-                       hwi = 25,
-                       it = 50,
-                       int = round(nrow(smpl)/4, 0))
-
-  }
-
-  if(!identical(names(background), c("lambda", "hwi", "it", "int"))) {
-
-    stop("Please provide the correct coefficient names in the background argument (lambda, hwi, it, int)")
-
-  }
-
-  #Ensure that the align is greater than 0.
-  if (align <= 0) {
-    stop("The align argument must be greater than 0")
-  }
 
   #Ensure that the lod is greater than 0.
-  if (lod <= 0) {
-    stop("The lod argument must be greater than 0")
+  if (lod < 0) {
+    stop("The lod argument must be equal to or greater than 0")
   }
 
   #Create a warning message if the shift is greater than 0.5, since this can confuse the optimisation
-  if (align > 0.5) {
+  if (align > 0.5 & manual_align == FALSE) {
     warning("Be cautious of large 2theta shifts. These can cause issues in sample alignment.")
   }
 
-  #Make only "Nelder-Mead", "BFGS", or "CG" optional for the solver
-  if (!solver %in% c("Nelder-Mead", "BFGS", "CG")) {
-    stop("The solver argument must be one of 'BFGS', 'Nelder Mead' or 'CG'")
+  #Make only "Nelder-Mead", "BFGS", "CG" or "L-BFGS-B" optional for the solver
+  if (!solver %in% c("Nelder-Mead", "BFGS", "CG", "L-BFGS-B")) {
+    stop("The solver argument must be one of 'BFGS', 'Nelder Mead', 'CG' or 'L-BFGS-B'")
   }
 
+  if (is.na(std_conc)) {
+
+  #If align is 0 and lod isn't being used then the standard can be set to 'none'
+  if (manual_align == TRUE & lod == 0) {
+
+    std <- "none"
+
+  }
+
+  if (align == 0 & lod == 0) {
+
+    std <- "none"
+
+  }
+
+  }
+
+
   #Make sure that the phase identified as the internal standard is contained within the reference library
-  if (!std %in% lib$phases$phase_id) {
+  if (!std == "none" & !std %in% lib$phases$phase_id) {
     stop("The phase you have specified as the internal standard is not in the reference library")
   }
 
@@ -264,16 +426,28 @@ afps.powdRlib <- function(lib, smpl, solver, obj, std, amorphous,
     names(lib$xrd) <- lib$phases$phase_id
   }
 
-  #Extract the standard as an xy dataframe
-  xrd_standard <- data.frame(tth = lib$tth, counts = lib$xrd[, which(lib$phases$phase_id == std)])
+  #Harmonise libraries
+  if (harmonise == TRUE & !identical(lib$tth, smpl[[1]])) {
+
+    harmonised <- .harmoniser(lib = lib, smpl = smpl)
+
+    smpl <- harmonised$smpl
+    lib <- harmonised$lib
+
+  }
 
   #align the data
+  if (!align == 0) {
   cat("\n-Aligning sample to the internal standard")
-  smpl <- .xrd_align(smpl = smpl, xrd_standard, xmin = tth_align[1],
-                     xmax = tth_align[2], xshift = align)
+  smpl <- .xrd_align(smpl = smpl,
+                     standard = data.frame(tth = lib$tth,
+                                           counts = lib$xrd[, which(lib$phases$phase_id == std)]),
+                     xmin = tth_align[1],
+                     xmax = tth_align[2], xshift = align,
+                     manual = manual_align)
 
   #If the alignment is close to the limit, provide a warning
-  if (sqrt(smpl[[1]]^2) > (align*0.95)) {
+  if (sqrt(smpl[[1]]^2) > (align*0.95) & manual_align == FALSE) {
     warning("The optimised shift used in alignment is equal to the maximum shift defined
             in the function call. We advise visual inspection of this alignment.")
   }
@@ -286,10 +460,19 @@ afps.powdRlib <- function(lib, smpl, solver, obj, std, amorphous,
   #Define a 2TH scale to harmonise all data to
   smpl_tth <- smpl[[1]]
 
+  } else {
+
+  names(smpl) <- c("tth", "counts")
+  smpl_tth <- smpl[[1]]
+
+  }
+
   #If tth_fps isn't defined, then define it here
   if(missing(tth_fps)) {
     tth_fps <- c(min(smpl_tth), max(smpl_tth))
   }
+
+  if (align > 0) {
 
   xrd_ref_names <- lib$phases$phase_id
 
@@ -304,6 +487,8 @@ afps.powdRlib <- function(lib, smpl, solver, obj, std, amorphous,
 
   #Replace the library tth with that of the sample
   lib$tth <- smpl_tth
+
+  }
 
   #### decrease 2TH scale to the range defined in the function call
   smpl <- smpl[which(smpl$tth >= tth_fps[1] & smpl$tth <= tth_fps[2]), ]
@@ -321,30 +506,13 @@ afps.powdRlib <- function(lib, smpl, solver, obj, std, amorphous,
   }
 
 
-  #------------------------------------------------------------------------------
-  #Extracting amorphous phases
-  #------------------------------------------------------------------------------
-
-  #Extract amorphous phases from the harmonised list to exclude them from analysis
-  #also exclude background parameters
-
-  amorphous_index <- which(lib$phases$phase_id %in% amorphous)
-
-  #If amorphous is present in the argument, then extract the patterns to be used
-
-  if(!missing(amorphous) & length(amorphous_index) > 0) {
-    amorphous_counts <- lib$xrd[amorphous]
-    amorphous_tth <- lib$tth
-    amorphous_xrd <- data.frame("tth" = amorphous_tth, amorphous_counts)
-    lib$xrd <- lib$xrd[, -amorphous_index]
-  }
 
   #--------------------------------------------
   #Initial NNLS to remove some samples
   #--------------------------------------------
 
   cat("\n-Applying non-negative least squares")
-  nnls_out <- .xrd_nnls(xrd.lib = lib, xrd.sample = smpl[, 2])
+  nnls_out <- .xrd_nnls(xrd.lib = lib, xrd.sample = smpl[, 2], force = force)
 
   lib$xrd <- nnls_out$xrd.lib
   x <- nnls_out$x
@@ -356,13 +524,35 @@ afps.powdRlib <- function(lib, smpl, solver, obj, std, amorphous,
     x <- rep(0, ncol(lib$xrd))
     names(x) <- names(lib$xrd)
 
+    if (solver %in% c("Nelder-Mead", "BFGS", "CG")) {
+
     cat("\n-Optimising...")
     o <- stats::optim(par = x, .fullpat,
                       method = solver, pure_patterns = lib$xrd,
                       sample_pattern = smpl[, 2], obj = obj)
 
+    } else {
+
+    cat("\n-Optimising using L-BFGS-B constrained to a lower limit of zero...")
+    o <- stats::optim(par = x, .fullpat,
+                      method = solver, lower = 0, pure_patterns = lib$xrd,
+                      sample_pattern = smpl[, 2], obj = obj)
+
+    }
+
     x <- o$par
 
+
+
+  #--------------------------------------------------------------------------------------------
+  #Remove negative/zero parameters
+  #--------------------------------------------------------------------------------------------
+
+  remove_neg_out <- .remove_neg(x = x, lib = lib, smpl = smpl,
+                                solver = solver, obj = obj, force = force)
+
+  x <- remove_neg_out[[1]]
+  lib <- remove_neg_out[[2]]
 
   #--------------------------------------------
   #Grid-search shifting
@@ -373,10 +563,12 @@ afps.powdRlib <- function(lib, smpl, solver, obj, std, amorphous,
 
   if(shift > 0) {
 
-   fpf_aligned <- .shift(smpl = smpl,
-                         lib = lib,
-                         max_shift = shift,
-                         x = x)
+    fpf_aligned <- .shift(smpl = smpl,
+                          lib = lib,
+                          max_shift = shift,
+                          x = x,
+                          res = shift_res,
+                          obj = obj)
 
     smpl <- fpf_aligned[["smpl"]]
     lib$xrd <- data.frame(fpf_aligned[["lib"]])
@@ -384,57 +576,35 @@ afps.powdRlib <- function(lib, smpl, solver, obj, std, amorphous,
 
   }
 
-  #-----------------------------------------------------------
-  #Re-adding amorphous phases and re-optimise
-  #-----------------------------------------------------------
 
-    x <- o$par
+  #----------------------------------------------
+  #Re-optimise after shifting
+  #----------------------------------------------
 
-    #Add the amorphous phases
+  if(shift > 0) {
 
-    if(length(amorphous_index) > 0) {
-      #Add the amorphous phase to the library
-      amorphous_counts2 <- list()
+    if (solver %in% c("Nelder-Mead", "BFGS", "CG")) {
 
-      for (i in 1:ncol(amorphous_counts)) {
-        amorphous_counts2[[i]] <- stats::approx(x = amorphous_tth, y = amorphous_counts[[i]],
-                                                method = "linear", xout = lib$tth)[[2]]
-        names(amorphous_counts2)[i] <- names(amorphous_counts)[i]
-      }
-      amorphous_counts2 <- data.frame(amorphous_counts2)
+      cat("\n-Reoptimising after shifting data")
 
-      lib$xrd <- data.frame(lib$xrd, amorphous_counts2)
+      o <- stats::optim(par = x, .fullpat,
+                        method = solver, pure_patterns = lib$xrd,
+                        sample_pattern = smpl[, 2], obj = obj)
 
-      #Add an initial parameter to the library for the optimisation
-      xa <- rep(0, ncol(amorphous_counts))
-      names(xa) <- names(amorphous_counts)
+    } else {
 
-      x <- c(x, xa)
+      cat("\n-Reoptimising after shifting data. Using L-BFGS-B constrained
+        to a lower limit of zero")
+
+      o <- stats::optim(par = x, .fullpat,
+                        method = solver, lower = 0, pure_patterns = lib$xrd,
+                        sample_pattern = smpl[, 2], obj = obj)
 
     }
-
-  if(shift > 0 | length(amorphous_index) > 0) {
-
-    cat("\n-Reoptimising after shifting data/adding amorphous phases")
-
-    o <- stats::optim(par = x, .fullpat,
-                      method = solver, pure_patterns = lib$xrd,
-                      sample_pattern = smpl[, 2], obj = obj)
 
     x <- o$par
 
   }
-
-
-  #--------------------------------------------------------------------------------------------
-  #Remove negative parameters
-  #--------------------------------------------------------------------------------------------
-
-  remove_neg_out <- .remove_neg(x = x, lib = lib, smpl = smpl,
-                                solver = solver, obj = obj)
-
-  x <- remove_neg_out[[1]]
-  lib <- remove_neg_out[[2]]
 
 
   #Now that some negative parameters have been removed, the detection limits
@@ -447,31 +617,77 @@ afps.powdRlib <- function(lib, smpl, solver, obj, std, amorphous,
   if (lod > 0) {
 
   cat("\n-Calculating detection limits")
-  xrd_detectable <- .lod(x = x, smpl = smpl, lib = lib,
-                        std = std, amorphous = amorphous,
-                        background = background, lod = lod)
-  cat("\n-Removing phases below detection limit")
+
+  if (is.na(std_conc)) {
+
+  xrd_detectable <- .lod(x = x, lib = lib,
+                          std = std, amorphous = amorphous,
+                          lod = lod,
+                         force = force)
+
+  } else {
+
+  xrd_detectable <- .lod2(x = x, lib = lib,
+                          std = std, std_conc = std_conc,
+                          amorphous = amorphous,
+                          lod = lod,
+                          force = force)
+
+  }
+
+  #Reoptimise if things have changed
+  logical_reoptimise <- identical(x[order(names(x))], xrd_detectable[["x"]])
 
   x <- xrd_detectable[["x"]]
   lib$xrd <- xrd_detectable[["lib"]]
 
-  cat("\n-Reoptimising")
+  if (logical_reoptimise == FALSE) {
+
+  if (solver %in% c("Nelder-Mead", "BFGS", "CG")) {
+
+  cat("\n-Reoptimising after removing crystalline phases below the limit of detection")
+
   o <- stats::optim(par = x, .fullpat,
                     method = solver, pure_patterns = lib$xrd,
                     sample_pattern = smpl[, 2], obj = obj)
+
+  } else {
+
+  cat("\n--Reoptimising after removing crystalline phases below the limit of detection. Using L-BFGS-B
+      constrained to a lower limit of zero")
+
+  o <- stats::optim(par = x, .fullpat,
+                    method = solver, lower = 0, pure_patterns = lib$xrd,
+                    sample_pattern = smpl[, 2], obj = obj)
+
+  }
+
   x <- o$par
+
+  }
 
   }
 
   #Calculate mineral concentrations so that I can throw away any amorphous
   #phases below detection limit
 
+  if (is.na(std_conc)) {
+
   min_concs <- .qminerals(x = x, xrd_lib = lib)
+
+  } else {
+
+  min_concs <- .qminerals2(x = x, xrd_lib = lib,
+                           std = std, std_conc = std_conc)
+
+  }
 
   df <- min_concs[[1]]
   dfs <- min_concs[[2]]
 
   #Remove amorphous phases
+  if (is.na(std_conc)) {
+
   remove_amorphous_out <- .remove_amorphous(x = x,
                                             amorphous = amorphous,
                                             amorphous_lod = amorphous_lod,
@@ -481,13 +697,29 @@ afps.powdRlib <- function(lib, smpl, solver, obj, std, amorphous,
                                             smpl = smpl,
                                             obj = obj)
 
+  } else {
+
+  remove_amorphous_out <- .remove_amorphous2(x = x,
+                                             amorphous = amorphous,
+                                             amorphous_lod = amorphous_lod,
+                                             df = df,
+                                             lib = lib,
+                                             solver = solver,
+                                             smpl = smpl,
+                                             obj = obj,
+                                             std = std,
+                                             std_conc = std_conc)
+
+  }
+
   x <- remove_amorphous_out[[1]]
   lib <- remove_amorphous_out[[2]]
 
 
   #Remove negative parameters again because some can creep in late-on
   remove_neg_out <- .remove_neg(x = x, lib = lib, smpl = smpl,
-                                  solver = solver, obj = obj)
+                                  solver = solver, obj = obj,
+                                force = force)
 
   x <- remove_neg_out[[1]]
   lib <- remove_neg_out[[2]]
@@ -497,9 +729,30 @@ afps.powdRlib <- function(lib, smpl, solver, obj, std, amorphous,
 
   resid_x <- smpl[, 2] - fitted_pattern
 
-  #compute grouped phase concentrations
+  #compute phase concentrations
   cat("\n-Computing phase concentrations")
-  min_concs <- .qminerals(x = x, xrd_lib = lib)
+
+  if (is.na(std_conc) | identical(names(x), std)) {
+
+    if (!identical(names(x), std)) {
+      cat("\n-Internal standard concentration unknown. Assuming phases sum to 100 %")
+    }
+
+    min_concs <- .qminerals(x = x, xrd_lib = lib)
+
+    if (identical(names(x), std)) {
+      cat("\n-Internal standard is the only phase present, defining its concentration as", std_conc, "%")
+      min_concs$df$phase_percent <- std_conc
+      min_concs$df$phase_percent <- std_conc
+
+    }
+
+  } else {
+
+    cat("\n-Using internal standard concentration of", std_conc, "% to compute phase concentrations")
+    min_concs <- .qminerals2(x = x, xrd_lib = lib, std = std, std_conc = std_conc)
+
+  }
 
   #Extract mineral concentrations (df) and summarised mineral concentrations (dfs)
   df <- min_concs[[1]]
@@ -522,21 +775,41 @@ afps.powdRlib <- function(lib, smpl, solver, obj, std, amorphous,
   }
 
 
+  #Define a list of the inputs
+
+  #Create a list of the input arguments
+  inputs <- list("harmonise" = harmonise,
+                 "solver" = solver,
+                 "obj" = obj,
+                 "std" = std,
+                 "force" = force,
+                 "std_conc" = std_conc,
+                 "tth_align" = tth_align,
+                 "align" = align,
+                 "manual_align" = manual_align,
+                 "shift" = shift,
+                 "shift_res" = shift_res,
+                 "tth_fps" = tth_fps,
+                 "lod" = lod,
+                 "amorphous" = amorphous,
+                 "amorphous_lod" = amorphous_lod)
+
+
   #Define a list that becomes the function output
   out <- list("tth" = smpl[,1],
               "fitted" = fitted_pattern,
               "measured" = smpl[,2],
-              "background" = xrd_detectable$background,
               "residuals" = resid_x,
               "phases" = df,
-              "phases_summary" = dfs,
+              "phases_grouped" = dfs,
               "rwp" = R_fit,
               "weighted_pure_patterns" = xrd,
-              "coefficients" = x)
+              "coefficients" = x,
+              "inputs" = inputs)
 
   #Define the class
   class(out) <- "powdRafps"
-  cat("\n-Automated full pattern summation complete")
+  cat("\n***Automated full pattern summation complete***\n")
 
   return(out)
 

@@ -4,76 +4,159 @@ knitr::opts_chunk$set(
   comment = "#>"
 )
 
-## ---- fig.show='hold', fig.cap = "**Figure 1:** The resulting fit on a sandstone soil when `fps()` is applied using a single quartz reference pattern. The top plot displays the measured and fitted patterns, and the bottom plots displays the residuals.", message = FALSE, warning = FALSE----
+## ---- message = FALSE, warning = FALSE-----------------------------------
 library(powdR)
 
-data(minerals)
-data(soils)
+data(minerals_xrd)
 
-#Apply summation to the sandstone sample, with quartz as the only mineral
-fit <- fps(lib = minerals,
-           smpl = soils$sandstone,
-           refs = "QUA.1",
-           std = "QUA.1",
-           align = 0.2)
+head(minerals_xrd[1:9])
 
-#plot the data to interpret the fit
-plot(fit)
+## ---- message = FALSE, warning = FALSE-----------------------------------
+data(minerals_phases)
 
-## ---- fig.show='hold', fig.cap = "**Figure 2:** The resulting full pattern fit on a sandstone soil when `fps()` is applied using reference patterns from quartz and organic matter.", message = FALSE, warning = FALSE----
-#Apply fps to the sandstone sample with quartz (crystalline) and organic matter (amorphous)
-fit <- fps(lib = minerals,
-           smpl = soils$sandstone,
-           refs = c("QUA.1", "ORG"),
-           std = "QUA.1",
-           align = 0.2)
+minerals_phases[1:8,]
 
-#plot the data to interpret the fit
-plot(fit)
+## ---- message = FALSE, warning = FALSE-----------------------------------
+identical(names(minerals_xrd[-1]),
+          minerals_phases$phase_id)
 
-## ---- fig.show='hold', fig.cap = "**Figure 3:** The resulting full pattern fit on a sandstone soil when `fps` is applied using reference patterns from quartz (2 different standards), kaolinite, plagioclase, K-feldspar and organic matter.", message = FALSE, warning = FALSE----
-#Apply fps to the sandstone sample, adding kaolinite, feldspar and oligoclase to the process
-fit <- fps(lib = minerals,
-           smpl = soils$sandstone,
-           refs = c("QUA.1",
-                    "QUA.2",
-                    "KAO",
-                    "FEL",
-                    "OLI"),
-           std = "QUA.1",
-           align = 0.2)
+## ---- message = FALSE, warning = FALSE-----------------------------------
+my_lib <- powdRlib(minerals_xrd, minerals_phases)
 
-#plot the data to interpret the fit
-plot(fit)
+plot(my_lib, wavelength = "Cu",
+     refs = c("ALB", "DOL.1",
+              "QUA.1", "GOE.2"))
 
-## ------------------------------------------------------------------------
-#returns individual contributions from each reference pattern
-fit$phases
+## ---- message = FALSE, warning = FALSE-----------------------------------
+data(rockjock)
 
-#returns summed contributions from each mineral
-fit$phases_summary
+#Have a look at the phase ID's in rockjock
+rockjock$phases$phase_id[1:10]
 
-## ---- fig.show='hold', fig.cap = "**Figure 4:** Application of `fps()`to the sandstone soil using NNLS instead of least squares optimisation.", message = FALSE, warning = FALSE----
+#Remove three phases from rockjock
+rockjock_1 <- subset(rockjock,
+                     refs = c("ALUNITE",
+                              "AMPHIBOLE",
+                              "ANALCIME"),
+                     mode = "remove")
 
-#Apply fps to the sandstone sample using NNLS. Note that when NNLS is selected as the solver argument, there is no need to define the refs because all phases in the library are used by default
-fit <- fps(lib = minerals,
-           smpl = soils$sandstone,
-           solver = "NNLS",
-           std = "QUA.1",
-           align = 0.2)
+#Check number of phases remaining in library
+nrow(rockjock_1$phases)
 
-#plot the data to interpret the fit
-plot(fit)
+#Keep three phases of rockjock
+rockjock_2 <- subset(rockjock,
+                     refs = c("ALUNITE",
+                              "AMPHIBOLE",
+                              "ANALCIME"),
+                     mode = "keep")
 
-## ---- fig.show='hold', fig.cap = "**Figure 5:** Application of `afps()` to the sandstone soil.", message = FALSE, warning = FALSE----
+#Check number of phases remaining
+nrow(rockjock_2$phases)
 
-#Apply afps to the sandstone sample using afps. Note that amorphous phases need to be specified because they are treated differently to crystalline phases in this algorithm
-fit <- afps(lib = minerals,
-           smpl = soils$sandstone,
-           std = "QUA.1",
-           amorphous = "ORG",
-           align = 0.2)
+## ---- message = FALSE, warning = FALSE-----------------------------------
+data("rockjock_mixtures")
 
-#plot the data to interpret the fit
-plot(fit)
+fit_1 <- fps(lib = rockjock,
+             smpl = rockjock_mixtures$Mix1,
+             refs = c("ORDERED_MICROCLINE",
+                      "LABRADORITE",
+                      "KAOLINITE_DRY_BRANCH",
+                      "MONTMORILLONITE_WYO",
+                      "ILLITE_1M_RM30",
+                      "CORUNDUM"),
+             std = "CORUNDUM",
+             std_conc = 20,
+             align = 0.3)
+
+## ---- message = FALSE, warning = FALSE-----------------------------------
+fit_1$phases
+
+## ---- message = FALSE, warning = FALSE-----------------------------------
+sum(fit_1$phases$phase_percent)
+
+## ---- message = FALSE, warning = FALSE-----------------------------------
+fit_2 <- fps(lib = rockjock,
+             smpl = rockjock_mixtures$Mix5,
+             refs = c("ORDERED_MICROCLINE",
+                      "LABRADORITE",
+                      "KAOLINITE_DRY_BRANCH",
+                      "MONTMORILLONITE_WYO",
+                      "CORUNDUM",
+                      "QUARTZ"),
+             std = "QUARTZ",
+             std_conc = 20,
+             align = 0.3)
+
+fit_2$phases
+
+sum(fit_2$phases$phase_percent)
+
+## ---- message = FALSE, warning = FALSE-----------------------------------
+fit_3 <- fps(lib = rockjock,
+             smpl = rockjock_mixtures$Mix1,
+             refs = c("ORDERED_MICROCLINE",
+                      "LABRADORITE",
+                      "KAOLINITE_DRY_BRANCH",
+                      "MONTMORILLONITE_WYO",
+                      "ILLITE_1M_RM30",
+                      "CORUNDUM"),
+             std_conc = NA,
+             std = "CORUNDUM",
+             align = 0.3)
+
+## ---- message = FALSE, warning = FALSE-----------------------------------
+fit_3$phases
+
+## ---- message = FALSE, warning = FALSE-----------------------------------
+sum(fit_3$phases$phase_percent)
+
+## ---- message = FALSE, warning = FALSE-----------------------------------
+#Create a sample with a shorter 2theta axis than the library
+Mix1_short <- subset(rockjock_mixtures$Mix1, tth > 10 & tth < 55)
+
+#Reduce the resolution by selecting only odd rows of the data
+Mix1_short <- Mix1_short[seq(1, nrow(Mix1_short), 2),]
+
+fit_4 <- fps(lib = rockjock,
+             smpl = Mix1_short,
+             refs = c("ORDERED_MICROCLINE",
+                      "LABRADORITE",
+                      "KAOLINITE_DRY_BRANCH",
+                      "MONTMORILLONITE_WYO",
+                      "ILLITE_1M_RM30",
+                      "CORUNDUM"),
+             std = "CORUNDUM",
+             align = 0.3)
+
+fit_4$phases
+
+## ---- message = FALSE, warning = FALSE-----------------------------------
+fit_5 <- afps(lib = rockjock,
+           smpl = rockjock_mixtures$Mix1,
+           std = "CORUNDUM",
+           align = 0.3,
+           lod = 1)
+
+fit_5$phases_grouped
+
+## ---- message = FALSE, warning = FALSE-----------------------------------
+plot(fit_5, wavelength = "Cu")
+
+## ---- message = FALSE, warning = FALSE-----------------------------------
+multi_fit <- lapply(rockjock_mixtures[1:3], fps,
+                    lib = rockjock,
+                    std = "CORUNDUM",
+                    refs = c("ORDERED_MICROCLINE",
+                             "LABRADORITE",
+                             "KAOLINITE_DRY_BRANCH",
+                             "MONTMORILLONITE_WYO",
+                             "ILLITE_1M_RM30",
+                             "CORUNDUM",
+                             "QUARTZ"),
+                    align = 0.3)
+
+names(multi_fit)
+
+## ---- message = FALSE, warning = FALSE-----------------------------------
+summarise_mineralogy(multi_fit, type = "grouped", order = TRUE)
 

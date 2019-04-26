@@ -1,3 +1,8 @@
+.gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  grDevices::hcl(h = hues, l = 65, c = 100)[1:n]
+}
+
 #' Plotting elements of a powdRfps object
 #'
 #' \code{plot.powdRfps} is designed to provide easy, adaptable plots
@@ -9,9 +14,9 @@
 #' argument.
 #'
 #' @param x a powdRfps object
-#' @param d logical. Denotes whether x-axis should be d-spacing. Default = FALSE.
-#' @param wavelength numeric. Wavelength of the measurements to be plotted (in
-#' angstroms), only required when \code{d = TRUE}.
+#' @param wavelength One of "Cu", "Co" or a custom numeric value defining the wavelength
+#' (in Angstroms). Used to compute d-spacings.When "Cu" or "Co" are supplied, wavelengths
+#' of 1.54056 or 1.78897 are used, respectively.
 #' @param interactive logical. If TRUE then the output will be an interactive
 #' ggplotly object. If FALSE then the output will be a ggplot object.
 #' @param ... other arguments
@@ -31,12 +36,11 @@
 #'                 std = "QUA.1",
 #'                 align = 0.2)
 #'
-#' plot(fps_sand)
-#' plot(fps_sand, interactive = TRUE)
-#' plot(fps_sand, d = TRUE, wavelength = 1.54, interactive = TRUE)
+#' plot(fps_sand, wavelength = "Cu")
+#' plot(fps_sand, wavelength = "Cu", interactive = TRUE)
 #' }
 #' @export
-plot.powdRfps <- function(x, d, wavelength, interactive, ...) {
+plot.powdRfps <- function(x, wavelength, interactive, ...) {
 
   if(missing(interactive)) {
     interactive <- FALSE
@@ -46,98 +50,103 @@ plot.powdRfps <- function(x, d, wavelength, interactive, ...) {
     stop("The interactive arugment must be logical.")
   }
 
-  if(missing(d)) {
-    d <- FALSE
+  #If wavelength is missing then stop the function call
+  if (missing(wavelength)) {
+
+    stop("Provide a wavelength so that d-spacings can be calculated")
+
   }
 
-  if(missing(wavelength)) {
-    wavelength <- 1
+  #If wavelength = "Cu" then define it
+  if (wavelength == "Cu") {
+
+    wavelength <- 1.54056
+
   }
 
-  if((d == TRUE & wavelength == 1) == TRUE) {
-    stop("Please provide the wavelength of the XRPD measurements
-         in order to calculate d-spacing.")
+  #If wavelength = "Cu" then define it
+  if (wavelength == "Co") {
+
+    wavelength <- 1.78897
+
   }
+
+  #At this point if wavelength isn't numeric then stop
+  if (!is.numeric(wavelength)) {
+
+    stop("The wavelength argument must be one of either 'Cu', 'Co', or
+         a custom numeric value")
+
+  }
+
+  #compute d
+  d_v <- round(wavelength/(2*sin((x$tth/2)*pi/180)), 3)
 
   #Create a dataframe of the weighted pure patterns and fitted pattern
   pure_patterns <- data.frame(tth = x$tth,
+                              d = d_v,
+                              Measured = x$measured,
                               Fitted = x$fitted,
                               x$weighted_pure_patterns)
 
-  #The original measurement
-  measured <- data.frame(tth = x$tth,
-                         Measured = x$measured)
+  refs_colors <- .gg_color_hue(ncol(x$weighted_pure_patterns))
 
   #Residuals
   resids <- data.frame(tth = x$tth,
-                       Residuals = x$residuals)
+                       d = d_v,
+                       Counts = x$residuals)
 
   #melt the pure patterns data frame
-  pure_patterns_long <- reshape::melt(pure_patterns, id = c("tth"))
+  pure_patterns_long <- reshape::melt(pure_patterns, id = c("tth", "d"))
 
-  #If wavelength is supplied, then compute d
-  if(d == TRUE) {
-    pure_patterns[["d"]] <- wavelength/(2*sin((pure_patterns$tth/2)*pi/180))
-    measured[["d"]] <- wavelength/(2*sin((measured$tth/2)*pi/180))
-    resids[["d"]] <- wavelength/(2*sin((resids$tth/2)*pi/180))
-    pure_patterns_long[["d"]] <- wavelength/(2*sin((pure_patterns_long$tth/2)*pi/180))
+  #Name the counts column
+  names(pure_patterns_long)[4] <- "Counts"
 
-    #and plot
-    g1 <- ggplot2::ggplot() +
-      ggplot2::geom_line(data = measured,
-                         ggplot2::aes_(x = ~d, y = ~Measured, color = "Measured"), size = 0.35, linetype = "dotted") +
-      ggplot2::geom_line(data = pure_patterns_long,
-                         ggplot2::aes_(x = ~d, y = ~value, color = ~variable), size = 0.15) +
-      ggplot2::scale_x_reverse() +
-      ggplot2::ylab("Counts") +
-      ggplot2::xlab("d") +
-      ggplot2::theme(legend.title = ggplot2::element_blank())
 
-    g2 <- ggplot2::ggplot() +
-      ggplot2::geom_line(data = resids,
-                         ggplot2::aes_(x = ~d, y = ~Residuals, color = "Residuals"), size = 0.15) +
-      ggplot2::scale_colour_manual(name = "",
-                                   values = c("Residuals" = "blue")) +
-      ggplot2::ylab("Counts") +
-      ggplot2::xlab("d") +
-      ggplot2::scale_x_reverse()
-  }
-  #If d is false then just plot a normal 2theta graph
-  else {
-    g1 <- ggplot2::ggplot() +
-      ggplot2::geom_line(data = measured,
-                         ggplot2::aes_(x = ~tth, y = ~Measured, color = "Measured"), size = 0.35, linetype = "dotted") +
-      ggplot2::geom_line(data = pure_patterns_long,
-                         ggplot2::aes_(x = ~tth, y = ~value, color = ~variable), size = 0.15) +
-      ggplot2::ylab("Counts") +
-      ggplot2::xlab("2theta") +
-      ggplot2::theme(legend.title = ggplot2::element_blank())
+  g1 <- suppressWarnings(ggplot2::ggplot() +
+                           ggplot2::geom_line(data = pure_patterns_long,
+                                              ggplot2::aes_(x = ~tth, y = ~Counts,
+                                                            color = ~variable,
+                                                            linetype = ~variable,
+                                                            d = ~d),
+                                              size = 0.25) +
+                           ggplot2::scale_color_manual(values = c("black", "red",
+                                                                  refs_colors)) +
+                           ggplot2::scale_linetype_manual(values = c("solid", "solid",
+                                                                     rep("dotted", ncol(x$weighted_pure_patterns)))) +
+                           ggplot2::ylab("Counts") +
+                           ggplot2::xlab("2theta") +
+                           ggplot2::theme(legend.title = ggplot2::element_blank()))
 
-    g2 <- ggplot2::ggplot() +
-      ggplot2::geom_line(data = resids,
-                         ggplot2::aes_(x = ~tth, y = ~Residuals, color = "Residuals"), size = 0.15) +
-      ggplot2::ylab("Counts") +
-      ggplot2::xlab("2theta") +
-      ggplot2::scale_colour_manual(name = "",
-                                   values = c("Residuals" = "blue"))
-  }
+  g2 <- suppressWarnings(ggplot2::ggplot() +
+                           ggplot2::geom_line(data = resids,
+                                              ggplot2::aes_(x = ~tth, y = ~Counts, color = "Residuals", d = ~d), size = 0.15) +
+                           ggplot2::ylab("Counts") +
+                           ggplot2::xlab("2theta") +
+                           ggplot2::scale_colour_manual(name = "",
+                                                        values = c("Residuals" = "blue")))
 
-  if(interactive == TRUE) {
-  #Convert to ggplotly
-  p1 <- plotly::ggplotly(g1)
-  p2 <- plotly::ggplotly(g2)
-  p3 <- plotly::subplot(p1, p2,
-                        nrows = 2,
-                        heights = c(0.5, 0.5),
-                        widths = c(1),
-                        shareX = TRUE,
-                        titleY = TRUE)
 
-  return(p3)
-  }
-  else {
-    g3 <- ggpubr::ggarrange(g1, g2, nrow = 2)
+  if (interactive == TRUE) {
+
+    #Convert to ggplotly
+    p1 <- plotly::ggplotly(g1, tooltip = c("x", "y", "d", "colour"))
+    p2 <- plotly::ggplotly(g2, tooltip = c("x", "y", "d", "colour"))
+    p3 <- plotly::subplot(p1, p2,
+                          nrows = 2,
+                          heights = c((2/3), (1/3)),
+                          widths = c(1),
+                          shareX = TRUE,
+                          titleY = TRUE)
+
+    return(p3)
+
+  } else {
+
+    g3 <- ggpubr::ggarrange(g1, g2, nrow = 2,
+                            heights = c(2,1))
     return(g3)
+
   }
 
 }
@@ -153,9 +162,9 @@ plot.powdRfps <- function(x, d, wavelength, interactive, ...) {
 #' argument.
 #'
 #' @param x a powdRfps object
-#' @param d logical. Denotes whether x-axis should be d-spacing. Default = FALSE.
-#' @param wavelength numeric. Wavelength of the measurements to be plotted (in
-#' angstroms), only required when \code{d = TRUE}.
+#' @param wavelength One of "Cu", "Co" or a custom numeric value defining the wavelength
+#' (in Angstroms). Used to compute d-spacings.When "Cu" or "Co" are supplied, wavelengths
+#' of 1.54056 or 1.78897 are used, respectively.
 #' @param interactive logical. If TRUE then the output will be an interactive
 #' ggplotly object. If FALSE then the output will be a ggplot object.
 #' @param ... other arguments
@@ -169,18 +178,19 @@ plot.powdRfps <- function(x, d, wavelength, interactive, ...) {
 #' data(soils)
 #'
 #' \dontrun{
-#' fps_sand <-  afps(lib = minerals,
-#'                 smpl = soils$sandstone,
-#'                 std = "QUA.1",
-#'                 amorphous = "ORG",
-#'                 align = 0.2)
+#' afps_sand <-  afps(lib = minerals,
+#'                    smpl = soils$sandstone,
+#'                    std = "QUA.1",
+#'                    amorphous = "ORG",
+#'                    align = 0.2,
+#'                    lod = 0.1)
 #'
-#' plot(fps_sand)
-#' plot(fps_sand, interactive = TRUE)
-#' plot(fps_sand, d = TRUE, wavelength = 1.54, interactive = TRUE)
+#' plot(afps_sand, wavelength = "Cu")
+#' plot(afps_sand, wavelength = "Cu", interactive = TRUE)
+#'
 #' }
 #' @export
-plot.powdRafps <- function(x, d, wavelength, interactive, ...) {
+plot.powdRafps <- function(x, wavelength, interactive, ...) {
 
   if(missing(interactive)) {
     interactive <- FALSE
@@ -190,111 +200,106 @@ plot.powdRafps <- function(x, d, wavelength, interactive, ...) {
     stop("The interactive arugment must be logical.")
   }
 
-  if(missing(d)) {
-    d <- FALSE
+  #If wavelength is missing then stop the function call
+  if (missing(wavelength)) {
+
+    stop("Provide a wavelength so that d-spacings can be calculated")
+
   }
 
-  if(missing(wavelength)) {
-    wavelength <- 1
+  #If wavelength = "Cu" then define it
+  if (wavelength == "Cu") {
+
+    wavelength <- 1.54056
+
   }
 
-  if((d == TRUE & wavelength == 1) == TRUE) {
-    stop("Please provide the wavelength of the XRPD measurements
-         in order to calculate d-spacing.")
+  #If wavelength = "Cu" then define it
+  if (wavelength == "Co") {
+
+    wavelength <- 1.78897
+
   }
+
+  #At this point if wavelength isn't numeric then stop
+  if (!is.numeric(wavelength)) {
+
+    stop("The wavelength argument must be one of either 'Cu', 'Co', or
+         a custom numeric value")
+
+  }
+
+  #compute d
+  d_v <- round(wavelength/(2*sin((x$tth/2)*pi/180)), 3)
 
   #Create a dataframe of the weighted pure patterns and fitted pattern
   pure_patterns <- data.frame(tth = x$tth,
+                              d = d_v,
+                              Measured = x$measured,
                               Fitted = x$fitted,
                               x$weighted_pure_patterns)
 
-  #The original measurement
-  measured <- data.frame(tth = x$tth,
-                         Measured = x$measured)
-
-  #The fitted background
-  background <- data.frame(tth = x$tth,
-                         Background = x$background)
+  refs_colors <- .gg_color_hue(ncol(x$weighted_pure_patterns))
 
   #Residuals
   resids <- data.frame(tth = x$tth,
-                       Residuals = x$residuals)
+                       d = d_v,
+                       Counts = x$residuals)
 
   #melt the pure patterns data frame
-  pure_patterns_long <- reshape::melt(pure_patterns, id = c("tth"))
+  pure_patterns_long <- reshape::melt(pure_patterns, id = c("tth", "d"))
 
-  #If wavelength is supplied, then compute d
-  if(d == TRUE) {
-    pure_patterns[["d"]] <- wavelength/(2*sin((pure_patterns$tth/2)*pi/180))
-    measured[["d"]] <- wavelength/(2*sin((measured$tth/2)*pi/180))
-    background[["d"]] <- wavelength/(2*sin((background$tth/2)*pi/180))
-    resids[["d"]] <- wavelength/(2*sin((resids$tth/2)*pi/180))
-    pure_patterns_long[["d"]] <- wavelength/(2*sin((pure_patterns_long$tth/2)*pi/180))
+  #Name the counts column
+  names(pure_patterns_long)[4] <- "Counts"
 
-    #and plot
-    g1 <- ggplot2::ggplot() +
-      ggplot2::geom_line(data = measured,
-                         ggplot2::aes_(x = ~d, y = ~Measured, color = "Measured"), size = 0.35, linetype = "dotted") +
-      ggplot2::geom_line(data = background,
-                         ggplot2::aes_(x = ~d, y = ~Background, color = "Background"), size = 0.35, linetype = "dotted") +
-      ggplot2::geom_line(data = pure_patterns_long,
-                         ggplot2::aes_(x = ~d, y = ~value, color = ~variable), size = 0.15) +
-      ggplot2::scale_x_reverse() +
-      ggplot2::ylab("Counts") +
-      ggplot2::xlab("d") +
-      ggplot2::theme(legend.title = ggplot2::element_blank())
 
-    g2 <- ggplot2::ggplot() +
-      ggplot2::geom_line(data = resids,
-                         ggplot2::aes_(x = ~d, y = ~Residuals, color = "Residuals"), size = 0.15) +
-      ggplot2::scale_colour_manual(name = "",
-                                   values = c("Residuals" = "blue")) +
-      ggplot2::ylab("Counts") +
-      ggplot2::xlab("d") +
-      ggplot2::scale_x_reverse()
-  }
-  #If d is false then just plot a normal 2theta graph
-  else {
-    g1 <- ggplot2::ggplot() +
-      ggplot2::geom_line(data = measured,
-                         ggplot2::aes_(x = ~tth, y = ~Measured, color = "Measured"), size = 0.35, linetype = "dotted") +
-      ggplot2::geom_line(data = background,
-                         ggplot2::aes_(x = ~tth, y = ~Background, color = "Background"), size = 0.35, linetype = "dotted") +
-      ggplot2::geom_line(data = pure_patterns_long,
-                         ggplot2::aes_(x = ~tth, y = ~value, color = ~variable), size = 0.15) +
-      ggplot2::ylab("Counts") +
-      ggplot2::xlab("2theta") +
-      ggplot2::theme(legend.title = ggplot2::element_blank())
+  g1 <- suppressWarnings(ggplot2::ggplot() +
+                           ggplot2::geom_line(data = pure_patterns_long,
+                                              ggplot2::aes_(x = ~tth, y = ~Counts,
+                                                            color = ~variable,
+                                                            linetype = ~variable,
+                                                            d = ~d),
+                                              size = 0.25) +
+                           ggplot2::scale_color_manual(values = c("black", "red",
+                                                                  refs_colors)) +
+                           ggplot2::scale_linetype_manual(values = c("solid", "solid",
+                                                                     rep("dotted", ncol(x$weighted_pure_patterns)))) +
+                           ggplot2::ylab("Counts") +
+                           ggplot2::xlab("2theta") +
+                           ggplot2::theme(legend.title = ggplot2::element_blank()))
 
-    g2 <- ggplot2::ggplot() +
-      ggplot2::geom_line(data = resids,
-                         ggplot2::aes_(x = ~tth, y = ~Residuals, color = "Residuals"), size = 0.15) +
-      ggplot2::ylab("Counts") +
-      ggplot2::xlab("2theta") +
-      ggplot2::scale_colour_manual(name = "",
-                                   values = c("Residuals" = "blue"))
-  }
+  g2 <- suppressWarnings(ggplot2::ggplot() +
+                           ggplot2::geom_line(data = resids,
+                                              ggplot2::aes_(x = ~tth, y = ~Counts, color = "Residuals", d = ~d), size = 0.15) +
+                           ggplot2::ylab("Counts") +
+                           ggplot2::xlab("2theta") +
+                           ggplot2::scale_colour_manual(name = "",
+                                                        values = c("Residuals" = "blue")))
 
-  if(interactive == TRUE) {
+
+  if (interactive == TRUE) {
+
     #Convert to ggplotly
-    p1 <- plotly::ggplotly(g1)
-    p2 <- plotly::ggplotly(g2)
+    p1 <- plotly::ggplotly(g1, tooltip = c("x", "y", "d", "colour"))
+    p2 <- plotly::ggplotly(g2, tooltip = c("x", "y", "d", "colour"))
     p3 <- plotly::subplot(p1, p2,
                           nrows = 2,
-                          heights = c(0.5, 0.5),
+                          heights = c((2/3), (1/3)),
                           widths = c(1),
                           shareX = TRUE,
                           titleY = TRUE)
 
     return(p3)
-  }
-  else {
-    g3 <- ggpubr::ggarrange(g1, g2, nrow = 2)
+
+  } else {
+
+    g3 <- ggpubr::ggarrange(g1, g2, nrow = 2,
+                            heights = c(2,1))
     return(g3)
-  }
 
   }
 
+}
 
 
 #' Plotting elements of a powdRlib object
@@ -307,7 +312,10 @@ plot.powdRafps <- function(x, d, wavelength, interactive, ...) {
 #' be made interactive using the logical \code{interactive} argument.
 #'
 #' @param x a powdRlib object
-#' @param patterns a character string of reference pattern id's to be plotted
+#' @param wavelength One of "Cu", "Co" or a custom numeric value defining the wavelength
+#' (in Angstroms). Used to compute d-spacings.When "Cu" or "Co" are supplied, wavelengths
+#' of 1.54056 or 1.78897 are used, respectively.
+#' @param refs a character string of reference pattern id's to be plotted
 #' @param interactive Logical. If TRUE then the output will be an interactive
 #' ggplotly object. If FALSE then the output will be a ggplot object.
 #' @param ... other arguments
@@ -318,18 +326,56 @@ plot.powdRafps <- function(x, d, wavelength, interactive, ...) {
 #' # Load the minerals library
 #' data(minerals)
 #' \dontrun{
-#' plot(minerals, patterns = "ALB")
-#' plot(minerals, patterns = "ALB", interactive = TRUE)
+#' plot(minerals, wavelength = "Cu", refs = "ALB")
+#' plot(minerals, wavelength = "Cu", refs = "ALB", interactive = TRUE)
 #' }
 #' @export
-plot.powdRlib <- function(x, patterns, interactive, ...) {
+plot.powdRlib <- function(x, wavelength, refs, interactive, ...) {
 
-  if(missing(patterns)) {
-    patterns <- c("")
+  #If a pattern is specified but isn't there, then stop
+  if (!missing(refs)) {
+
+    if (!length(which(refs %in% x$phases$phase_id)) == length(refs)) {
+      stop("Not all refs defined relate to phase ID's in the library")
+    }
+
   }
 
-  if(!missing(patterns) & !is.character(patterns)) {
-    stop("The patterns argument must be a character string
+  if(missing(refs)) {
+    refs <- c("")
+  }
+
+  #If wavelength is missing then stop the function call
+  if (missing(wavelength)) {
+
+    stop("Provide a wavelength so that d-spacings can be calculated")
+
+  }
+
+  #If wavelength = "Cu" then define it
+  if (wavelength == "Cu") {
+
+    wavelength <- 1.54056
+
+  }
+
+  #If wavelength = "Cu" then define it
+  if (wavelength == "Co") {
+
+    wavelength <- 1.78897
+
+  }
+
+  #At this point if wavelength isn't numeric then stop
+  if (!is.numeric(wavelength)) {
+
+    stop("The wavelength argument must be one of either 'Cu', 'Co', or
+         a custom numeric value")
+
+  }
+
+  if(!missing(refs) & !is.character(refs)) {
+    stop("The refs argument must be a character string
          of the reference pattern ID's to be plotted")
   }
 
@@ -341,36 +387,27 @@ plot.powdRlib <- function(x, patterns, interactive, ...) {
     stop("The interactive arugment must be logical.")
   }
 
+  d_v <- round(wavelength/(2*sin((x$tth/2)*pi/180)), 3)
+
   melted <- reshape::melt(data.frame("tth" = x[[2]],
-                                     x[[1]]), id = c("tth"))
+                                     "d" = d_v,
+                                     x[[1]]), id = c("tth", "d"))
 
-  names(melted) <- c("tth", "phase", "counts")
+  names(melted) <- c("tth", "d", "phase", "Counts")
 
-  if(length(which(melted$phase %in% patterns)) > 0) {
-    melted <- melted[which(melted$phase %in% patterns), ]
+  if(length(which(melted$phase %in% refs)) > 0) {
+    melted <- melted[which(melted$phase %in% refs), ]
   }
 
-  if(length(table(melted$phase)) > 1) {
 
-  p <- ggplot2::ggplot(data = melted) +
-    ggplot2::geom_line(ggplot2::aes_(x = ~tth, y = ~counts,
-                           color = ~phase),
+  p <- suppressWarnings(ggplot2::ggplot(data = melted) +
+    ggplot2::geom_line(ggplot2::aes_(x = ~tth, y = ~Counts,
+                           color = ~phase, d = ~d),
                        size = 0.15) +
     ggplot2::xlab("2theta") +
     ggplot2::ylab("Counts") +
-    ggplot2::theme(legend.title = ggplot2::element_blank())
+    ggplot2::theme(legend.title = ggplot2::element_blank()))
 
-  } else {
-
-  p <- ggplot2::ggplot(data = melted) +
-      ggplot2::geom_line(ggplot2::aes_(x = ~tth, y = ~counts,
-                                       color = ~phase),
-                         size = 0.15) +
-      ggplot2::xlab("2theta") +
-      ggplot2::ylab("Counts") +
-      ggplot2::theme(legend.position = "none")
-
-  }
 
   if(interactive == TRUE) {
     p <- plotly::ggplotly(p)

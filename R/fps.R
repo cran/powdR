@@ -1,12 +1,19 @@
-.xrd_nnls <- function(xrd.lib, xrd.sample) {
+.xrd_nnls <- function(xrd.lib, xrd.sample, force) {
 
+  if(missing(force)) {
+    force <- c()
+  }
+
+  #Do the initial NNLS
   mat <- xrd.lib$xrd
 
   x <- nnls::nnls(as.matrix(mat), xrd.sample)
   x <- x$x
   names(x) <- names(data.frame(mat))
 
-  remove_these <- which(x == 0)
+  #If force isn't being used then just remove any phase = 0
+
+  remove_these <- which(x == 0 & !names(x) %in% force)
 
   if(length(remove_these) > 0) {
   x <- x[-remove_these]
@@ -66,44 +73,6 @@
   }
 }
 
-.qminerals <- function(x, xrd_lib) {
-
-  #Make sure x is ordered if there are more than 1 phases in the library
-  if (length(x) > 1) {
-    x <- x[order(names(x))]
-  }
-
-  #Restrict the xrd library to phases within the names of fpf_pc
-  minerals <- xrd_lib$phases
-
-  minerals <- minerals[which(minerals$phase_id %in% names(x)),]
-
-  #Order to the same as fpf_pc
-  if (length(x) > 1) {
-    minerals <- minerals[order(minerals$phase_id),]
-  }
-
-  min_percent <- (x/minerals$rir)/sum(x/minerals$rir)*100
-
-  names(min_percent) <- minerals$phase_id
-
-  df <- data.frame(minerals, "phase_percent" = min_percent)
-  row.names(df) = c(1:nrow(df))
-
-  #Summarise by summing the concentrations from each mineral group
-
-  dfs <- data.frame(stats::aggregate(phase_percent ~ phase_name, data = df, FUN = sum),
-                    stringsAsFactors = FALSE)
-
-  #Ensure that the phase concentrations are rounded to 4 dp
-  df$phase_percent <- round(df$phase_percent, 4)
-  dfs$phase_percent <- round(dfs$phase_percent, 4)
-
-  out <- list("df" = df, "dfs" = dfs)
-
-  return(out)
-}
-
 
 #' Full pattern summation
 #'
@@ -112,7 +81,7 @@
 #'
 #' Applies full pattern summation (Chipera & Bish, 2002, 2013; Eberl, 2003) to an XRPD
 #' measurement to quantify phase concentrations. Requires a \code{powdRlib} library of
-#' reference patterns with pre-measured reference intensity ratios in order to derive
+#' reference patterns with reference intensity ratios in order to derive
 #' mineral concentrations.
 #'
 #' @param lib A \code{powdRlib} object representing the reference library. Created using the
@@ -125,11 +94,12 @@
 #' \item{measured}{a vector of the original XRPD measurement (aligned)}
 #' \item{residuals}{a vector of the residuals (fitted vs measured)}
 #' \item{phases}{a dataframe of the phases used to produce the fitted pattern}
-#' \item{phases_summary}{the phases dataframe grouped by phase_name and summarised (sum)}
+#' \item{phases_grouped}{the phases dataframe grouped by phase_name and summed}
 #' \item{rwp}{the Rwp of the fitted vs measured pattern}
 #' \item{weighted_pure_patterns}{a dataframe of reference patterns used to produce the fitted pattern.
 #' All patterns have been weighted according to the coefficients used in the fit}
 #' \item{coefficients}{a named vector of coefficients used to produce the fitted pattern}
+#' \item{inputs}{a list of input arguments used in the function call}
 #'
 #' @examples
 #' #Load the minerals library
@@ -159,6 +129,45 @@
 #'                    refs = minerals$phases$phase_id,
 #'                    std = "QUA.1",
 #'                    align = 0.2)
+#'
+#' #Alternatively run all 3 at once using lapply
+#'
+#' fps_soils <- lapply(soils, fps,
+#'                     lib = minerals,
+#'                     std = "QUA.2",
+#'                     refs = minerals$phases$phase_id,
+#'                     align = 0.2)
+#'
+#' #Using the rockjock library:
+#'
+#' data(rockjock)
+#' data(rockjock_mixtures)
+#'
+#' rockjock_1 <- fps(lib = rockjock,
+#'                   smpl = rockjock_mixtures$Mix1,
+#'                   refs = c("ORDERED_MICROCLINE",
+#'                            "LABRADORITE",
+#'                            "KAOLINITE_DRY_BRANCH",
+#'                            "MONTMORILLONITE_WYO",
+#'                            "ILLITE_1M_RM30",
+#'                            "CORUNDUM"),
+#'                   std = "CORUNDUM",
+#'                   align = 0.3)
+#'
+#' #Alternatively you can specify the internal standard
+#' #concentration if known:
+#' rockjock_1s <- fps(lib = rockjock,
+#'                  smpl = rockjock_mixtures$Mix1,
+#'                  refs = c("ORDERED_MICROCLINE",
+#'                           "LABRADORITE",
+#'                           "KAOLINITE_DRY_BRANCH",
+#'                           "MONTMORILLONITE_WYO",
+#'                           "ILLITE_1M_RM30",
+#'                           "CORUNDUM"),
+#'                  std = "CORUNDUM",
+#'                  std_conc = 20,
+#'                  align = 0.3)
+#'
 #' }
 #' @references
 #' Chipera, S.J., Bish, D.L., 2013. Fitting Full X-Ray Diffraction Patterns for Quantitative Analysis:
@@ -169,7 +178,7 @@
 #' diffraction using measured and calculated patterns. J. Appl. Crystallogr. 35, 744-749.
 #' doi:10.1107/S0021889802017405
 #'
-#' Eberl, D.D., 2003. User's guide to ROCKJOCK - A program for determining quantitative mineralogy from
+#' Eberl, D.D., 2003. User's guide to RockJock - A program for determining quantitative mineralogy from
 #' powder X-ray diffraction data. Boulder, CA.
 #' @export
 fps <- function(lib, ...) {
@@ -183,28 +192,44 @@ fps <- function(lib, ...) {
 #'
 #' Applies full pattern summation (Chipera & Bish, 2002, 2013; Eberl, 2003) to an XRPD
 #' sample to quantify phase concentrations. Requires a \code{powdRlib} library of reference
-#' patterns with pre-measured reference intensity ratios in order to derive mineral
+#' patterns with reference intensity ratios in order to derive mineral
 #' concentrations.
 #'
 #' @param lib A \code{powdRlib} object representing the reference library. Created using the
 #' \code{powdRlib} constructor function.
 #' @param smpl A data frame. First column is 2theta, second column is counts
+#' @param harmonise logical parameter defining whether to harmonise the \code{lib} and \code{smpl}.
+#' Default = \code{TRUE}. Harmonises to the intersecting 2theta range at the coarsest resolution
+#' available.
 #' @param solver The optimisation routine to be used. One of \code{c("BFGS", "Nelder-Mead",
-#' "CG" or "NNLS")}. Default = \code{"BFGS"}.
-#' @param obj The objective function to minimise when "BFGS", "Nelder-Mead", or
-#' "CG" are used as the `solver` argument. One of \code{c("Delta", "R", "Rwp")}.
+#' "CG", "L-BFGS-B", or "NNLS")}. Default = \code{"BFGS"}.
+#' @param obj The objective function to minimise when "BFGS", "Nelder-Mead",
+#' "CG" or "L-BFGS-B" are used as the `solver` argument. One of \code{c("Delta", "R", "Rwp")}.
 #' Default = \code{"Rwp"}. See Chipera and Bish (2002) and page 247 of Bish and Post (1989)
 #' for definitions of these functions.
 #' @param refs A character string of reference pattern ID's from the specified library.
 #' The ID's must match ID's in the \code{lib$phases$phase_id} column.
 #' @param std The phase ID (e.g. "QUA.1") to be used as internal
 #' standard. Must match an ID provided in the \code{phases} parameter.
+#' @param std_conc The concentration of the internal standard (if known) in weight percent. If
+#' unknown then use \code{std_conc = NA}, in which case it will be assumed that all phases sum
+#' to 100 percent (default).
 #' @param tth_align A vector defining the minimum and maximum 2theta values to be used during
 #' alignment. If not defined, then the full range is used.
 #' @param align The maximum shift that is allowed during initial 2theta
 #' alignment (degrees). Default = 0.1.
+#' @param manual_align A logical operator denoting whether to optimise the alignment within the
+#' negative/position 2theta range defined in the \code{align} argument, or to use the specified
+#' value of the \code{align} argument for alignment of the sample to the standards. Default
+#' = \code{FALSE}, i.e. alignment is optimised.
 #' @param tth_fps A vector defining the minimum and maximum 2theta values to be used during
 #' full pattern summation. If not defined, then the full range is used.
+#' @param shift The maximum shift (degrees 2theta) that is allowed during the grid search phases selected
+#' from the non-negative least squares. Default = 0.05).
+#' @param shift_res A single integer defining the increase in resolution used during grid search shifting. Higher
+#' values facilitate finer shifts at the expense of longer computation. Default = 4.
+#' @param remove_trace A single numeric value representing the limit for the concentration of trace phases to
+#' be retained, i.e. any mineral with an estimated concentration below `remove_trace` will be omitted. Default = 0.
 #' @param ... other arguments
 #'
 #' @return a list with components:
@@ -213,11 +238,12 @@ fps <- function(lib, ...) {
 #' \item{measured}{a vector of the original XRPD measurement (aligned)}
 #' \item{residuals}{a vector of the residuals (fitted vs measured)}
 #' \item{phases}{a dataframe of the phases used to produce the fitted pattern}
-#' \item{phases_summary}{the phases dataframe grouped by phase_name and summarised (sum)}
+#' \item{phases_grouped}{the phases dataframe grouped by phase_name and summed}
 #' \item{rwp}{the Rwp of the fitted vs measured pattern}
 #' \item{weighted_pure_patterns}{a dataframe of reference patterns used to produce the fitted pattern.
 #' All patterns have been weighted according to the coefficients used in the fit}
 #' \item{coefficients}{a named vector of coefficients used to produce the fitted pattern}
+#' \item{inputs}{a list of input arguments used in the function call}
 #'
 #' @examples
 #' #Load the minerals library
@@ -247,6 +273,45 @@ fps <- function(lib, ...) {
 #'                    refs = minerals$phases$phase_id,
 #'                    std = "QUA.1",
 #'                    align = 0.2)
+#'
+#' #Alternatively run all 3 at once using lapply
+#'
+#' fps_soils <- lapply(soils, fps,
+#'                     lib = minerals,
+#'                     std = "QUA.2",
+#'                     refs = minerals$phases$phase_id,
+#'                     align = 0.2)
+#'
+#' #Using the rockjock library:
+#'
+#' data(rockjock)
+#' data(rockjock_mixtures)
+#'
+#' rockjock_1 <- fps(lib = rockjock,
+#'                   smpl = rockjock_mixtures$Mix1,
+#'                   refs = c("ORDERED_MICROCLINE",
+#'                            "LABRADORITE",
+#'                            "KAOLINITE_DRY_BRANCH",
+#'                            "MONTMORILLONITE_WYO",
+#'                            "ILLITE_1M_RM30",
+#'                            "CORUNDUM"),
+#'                   std = "CORUNDUM",
+#'                   align = 0.3)
+#'
+#' #Alternatively you can specify the internal standard
+#' #concentration if known:
+#' rockjock_1s <- fps(lib = rockjock,
+#'                  smpl = rockjock_mixtures$Mix1,
+#'                  refs = c("ORDERED_MICROCLINE",
+#'                           "LABRADORITE",
+#'                           "KAOLINITE_DRY_BRANCH",
+#'                           "MONTMORILLONITE_WYO",
+#'                           "ILLITE_1M_RM30",
+#'                           "CORUNDUM"),
+#'                  std = "CORUNDUM",
+#'                  std_conc = 20,
+#'                  align = 0.3)
+#'
 #' }
 #' @references
 #' Bish, D.L., Post, J.E., 1989. Modern powder diffraction. Mineralogical Society of America.
@@ -259,81 +324,202 @@ fps <- function(lib, ...) {
 #' diffraction using measured and calculated patterns. J. Appl. Crystallogr. 35, 744-749.
 #' doi:10.1107/S0021889802017405
 #'
-#' Eberl, D.D., 2003. User's guide to ROCKJOCK - A program for determining quantitative mineralogy from
+#' Eberl, D.D., 2003. User's guide to RockJock - A program for determining quantitative mineralogy from
 #' powder X-ray diffraction data. Boulder, CA.
 #' @export
-fps.powdRlib <- function(lib, smpl, solver, obj, refs, std,
-                tth_align, align, tth_fps, ...) {
+fps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, std_conc,
+                tth_align, align, manual_align, tth_fps, shift, shift_res, remove_trace, ...) {
 
-  #Create defaults for values that aren't specified.
+  if (missing(harmonise)) {
+
+    harmonise <- TRUE
+
+  }
+
+  if (!is.logical(harmonise)) {
+
+    stop("The harmonise argument must be logical.")
+
+  }
+
+  if (harmonise == FALSE & !identical(lib$tth, smpl[[1]])) {
+
+    stop("The 2theta scale of the library and sample do not match. Try
+         setting the harmonise argument to TRUE.")
+
+  }
+
+  if (missing(std_conc)) {
+
+    std_conc <- NA
+
+  }
+
+  if (!(is.numeric(std_conc) | is.na(std_conc))) {
+
+    stop("\n-The std_conc argument must either be NA or a numeric value greater than 0 and less than 100.")
+
+  }
+
+  if (is.numeric(std_conc)) {
+
+    if (missing(std)) {
+
+      stop("\n-Please define the std argument")
+
+    }
+
+    if(std_conc <= 0 | std_conc >= 100) {
+
+      stop("\n-The std_conc argument must either be NA or a numeric value greater than 0 and less than 100.")
+
+    }
+
+  }
+
+
+  #If tth_align is missing then use the maximum tth range
   if(missing(tth_align)) {
-    cat("\n-Using maximum tth range")
+
     tth_align <- c(min(smpl[[1]]), max(smpl[[1]]))
   }
 
+  #If align is missing then set it to default
   if(missing(align)) {
-    cat("\n-Using default alignment of 0.1")
+
     align = 0.1
   }
 
+  if(missing(manual_align)) {
+
+    manual_align <- FALSE
+
+  }
+
+  if(!is.logical(manual_align)) {
+
+    stop("The manual_align argument must be logical")
+
+  }
+
+  #If solver is missing then set it to BFGS
   if(missing(solver)) {
-    cat("\n-Using default solver of BFGS")
+
     solver = "BFGS"
   }
 
+  #If shift is missing then set it to default
+  if(missing(shift)) {
+
+    shift = 0
+  }
+
+  #If shift_res is missing then set it to default
+  if(missing(shift_res)) {
+    shift_res = 4
+  }
+
+  #If remove_trace is missing then set it to default
+  if(missing(remove_trace)) {
+    remove_trace = 0
+  }
+
+  #If solver is NNLS and refs aren't defined then use all of them
   if(solver == "NNLS" & missing(refs)) {
 
     refs = lib$phases$phase_id
 
   }
 
-  if(missing(obj) & solver %in% c("Nelder-Mead", "BFGS", "CG")) {
-    cat("\n-Using default objective function of Rwp")
+  #If obj is not defined and needs to be, set it to Rwp
+  if(missing(obj) & solver %in% c("Nelder-Mead", "BFGS", "CG", "L-BFGS-B")) {
+
     obj = "Rwp"
   }
 
-  #Ensure that the align is greater than 0.
-  if (align <= 0) {
-    stop("The align argument must be greater than 0")
+  #If obj is missing and NNLS is being used along with some shift
+  #then set obj to Rwp
+  if(missing(obj) & solver == "NNLS" & shift > 0) {
+
+    obj = "Rwp"
+  }
+
+  #But if obj definitely isn't needed then set it to NULL
+  if(missing(obj) & solver == "NNLS" & shift == 0) {
+
+    obj = NULL
   }
 
   #Create a warning message if the shift is greater than 0.5, since this can confuse the optimisation
-  if (align > 0.5) {
+  if (abs(align) > 0.5 & manual_align == FALSE) {
     warning("Be cautious of large 2theta shifts. These can cause issues in sample alignment.")
   }
 
-  #Make only "Nelder-Mead", "BFGS", or "CG" or "NNLS" optional for the solver
-  if (!solver %in% c("Nelder-Mead", "BFGS", "CG", "NNLS")) {
-    stop("The solver argument must be one of 'BFGS', 'Nelder Mead', 'CG' or 'NNLS'")
+  #Create a warning message if the shift is greater than 0.5, since this can confuse the optimisation
+  if (remove_trace < 0) {
+    stop("The remove_trace argument must be greater than 0.")
+  }
+
+  #Make only "Nelder-Mead", "BFGS", or "CG", "L-BFGS-B" or "NNLS" optional for the solver
+  if (!solver %in% c("Nelder-Mead", "BFGS", "CG", "L-BFGS-B", "NNLS")) {
+    stop("The solver argument must be one of 'BFGS', 'Nelder Mead', 'CG', 'L-BFGS-B' or 'NNLS'")
+  }
+
+  #If there is no internal standard used in computing phase concentrations and
+  #align is 0 then the standard can be set to 'none'
+
+  if (is.na(std_conc)) {
+
+  if (align == 0 | manual_align == TRUE) {
+
+    std <- "none"
+
+  }
+
   }
 
   #Make sure that the phase identified as the internal standard is contained within the reference library
-  if (!std %in% lib$phases$phase_id) {
+  if (!std == "none" & !std %in% lib$phases$phase_id) {
   stop("The phase you have specified as the internal standard is not in the reference library")
   }
 
-#subset lib according to the phases vector
+  #subset lib according to the phases vector
 
-lib$xrd <- lib$xrd[, which(lib$phases$phase_id %in% refs)]
-lib$phases <- lib$phases[which(lib$phases$phase_id %in% refs), ]
+  lib$xrd <- lib$xrd[which(lib$phases$phase_id %in% refs)]
+  lib$phases <- lib$phases[which(lib$phases$phase_id %in% refs), ]
 
 
-#if only one phase is being used, make sure it's a dataframe and named correctly
-if (length(refs) == 1) {
-  lib$xrd <- data.frame("phase" = lib$xrd)
-  names(lib$xrd) <- refs
-}
+  #if only one phase is being used, make sure it's a dataframe and named correctly
+  #if (length(refs) == 1) {
+  #  lib$xrd <- data.frame("phase" = lib$xrd)
+  #  names(lib$xrd) <- refs
+  #}
 
-#Extract the standard as an xy dataframe
-xrd_standard <- data.frame(tth = lib$tth, counts = lib$xrd[, which(lib$phases$phase_id == std)])
+
+#Harmonise libraries
+  if (harmonise == TRUE & !identical(lib$tth, smpl[[1]])) {
+
+    harmonised <- .harmoniser(lib = lib, smpl = smpl)
+
+    smpl <- harmonised$smpl
+    lib <- harmonised$lib
+
+  }
+
+
+if (!align == 0) {
 
 #align the data
 cat("\n-Aligning sample to the internal standard")
-smpl <- .xrd_align(smpl = smpl, xrd_standard, xmin = tth_align[1],
-                    xmax = tth_align[2], xshift = align)
+smpl <- .xrd_align(smpl = smpl,
+                   standard = data.frame(tth = lib$tth,
+                                         counts = lib$xrd[, which(lib$phases$phase_id == std)]),
+                   xmin = tth_align[1],
+                   xmax = tth_align[2], xshift = align,
+                   manual = manual_align)
 
 #If the alignment is close to the limit, provide a warning
-if (sqrt(smpl[[1]]^2) > (align*0.95)) {
+if (sqrt(smpl[[1]]^2) > (align*0.95) & manual_align == FALSE) {
   warning("The optimised shift used in alignment is equal to the maximum shift defined
           in the function call. We advise visual inspection of this alignment.")
 }
@@ -346,10 +532,20 @@ smpl <- smpl[which(smpl[[1]] >= min(lib$tth) & smpl[[1]] <= max(lib$tth)), ]
 #Define a 2TH scale to harmonise all data to
 smpl_tth <- smpl[[1]]
 
+} else {
+
+ names(smpl) <- c("tth", "counts")
+ smpl_tth <- smpl[[1]]
+
+}
+
 #If tth_fps isn't defined, then define it here
 if(missing(tth_fps)) {
   tth_fps <- c(min(smpl_tth), max(smpl_tth))
 }
+
+
+if (align > 0) {
 
 xrd_ref_names <- lib$phases$phase_id
 
@@ -361,6 +557,8 @@ lib$xrd <- data.frame(lapply(names(lib$xrd),
                                                           xout = smpl_tth)[[2]]))
 
 names(lib$xrd) <- xrd_ref_names
+
+}
 
 #Replace the library tth with that of the sample
 lib$tth <- smpl_tth
@@ -380,7 +578,7 @@ if (is.vector(lib$xrd)) {
   names(lib$xrd) <- refs
 }
 
-if (solver %in% c("Nelder-Mead", "BFGS", "CG")) {
+if (solver %in% c("Nelder-Mead", "BFGS", "CG", "L-BFGS-B")) {
 
 #--------------------------------------------
 #Initial Optimisation
@@ -389,15 +587,28 @@ if (solver %in% c("Nelder-Mead", "BFGS", "CG")) {
 x <- rep(0, ncol(lib$xrd))
 names(x) <- names(lib$xrd)
 
+if (solver == "L-BFGS-B") {
+
+ cat("\n-Optimising using L-BFGS-B constrained to a lower limit of zero...")
+
+ o <- stats::optim(par = x, .fullpat,
+                   method = solver, lower = 0, pure_patterns = lib$xrd,
+                   sample_pattern = smpl[, 2], obj = obj)
+
+} else {
+
 cat("\n-Optimising...")
+
 o <- stats::optim(par = x, .fullpat,
            method = solver, pure_patterns = lib$xrd,
            sample_pattern = smpl[, 2], obj = obj)
 
+}
+
 x <- o$par
 
 #-----------------------------------------------
-# Remove negative parameters
+# Remove negative parameters or parameters equal to zero
 #-----------------------------------------------
 
 remove_neg_out <- .remove_neg(x = x, lib = lib, smpl = smpl,
@@ -414,30 +625,127 @@ lib <- remove_neg_out[[2]]
   lib$xrd <- nnls_out$xrd.lib
   x <- nnls_out$x
 
+}
+
+
+#----------------------------------------------------
+# Grid search shifting
+#----------------------------------------------------
+
+#Shift and then another optimisation ONLY if the shift parameter
+#is greater than zero
+
+if(shift > 0) {
+
+  fpf_aligned <- .shift(smpl = smpl,
+                        lib = lib,
+                        max_shift = shift,
+                        x = x,
+                        res = shift_res,
+                        obj = obj)
+
+  smpl <- fpf_aligned[["smpl"]]
+  lib$xrd <- data.frame(fpf_aligned[["lib"]])
+  lib$tth <- smpl[,1]
+
+
+
+
+#----------------------------------------------
+#Re-optimise after shifting
+#----------------------------------------------
+
+  if (solver %in% c("Nelder-Mead", "BFGS", "CG", "L-BFGS-B")) {
+
+    cat("\n-Reoptimising after shifting data")
+
+    o <- stats::optim(par = x, .fullpat,
+                      method = solver, pure_patterns = lib$xrd,
+                      sample_pattern = smpl[, 2], obj = obj)
+
+    x <- o$par
+
+  } else {
+
+    cat("\n-Applying non-negative least squares")
+
+    nnls_out <- .xrd_nnls(xrd.lib = lib, xrd.sample = smpl[, 2])
+
+    lib$xrd <- nnls_out$xrd.lib
+
+    x <- nnls_out$x
+
   }
+
+#--------------------------------------------------------------------------------------------
+#Remove negative/zero parameters after shifting
+#--------------------------------------------------------------------------------------------
+
+if (!solver == 'NNLS') {
+
+remove_neg_out <- .remove_neg(x = x, lib = lib, smpl = smpl,
+                              solver = solver, obj = obj)
+
+x <- remove_neg_out[[1]]
+lib <- remove_neg_out[[2]]
+
+}
+
+}
+
+#-------------------------------------------------------------------------------------------
+#Remove trace patterns
+#-------------------------------------------------------------------------------------------
+
+if (remove_trace > 0) {
+
+  remove_trace_out <- .remove_trace(x = x, lib = lib, smpl = smpl,
+                                  solver = solver, obj = obj,
+                                  remove_trace = remove_trace)
+  x <- remove_trace_out[[1]]
+  lib <- remove_trace_out[[2]]
+
+}
+
+#--------------------------------------------------------
+#Compute fitted pattern and quantify
+#--------------------------------------------------------
 
 #compute fitted pattern and residuals
 fitted_pattern <- apply(sweep(as.matrix(lib$xrd), 2, x, "*"), 1, sum)
 
 resid_x <- smpl[, 2] - fitted_pattern
 
-#compute grouped phase concentrations
+#compute phase concentrations
 cat("\n-Computing phase concentrations")
-min_concs <- .qminerals(x = x, xrd_lib = lib)
+
+if (is.na(std_conc) | identical(names(x), std)) {
+
+  if (!identical(names(x), std)) {
+  cat("\n-Internal standard concentration unknown. Assuming phases sum to 100 %")
+  }
+
+  min_concs <- .qminerals(x = x, xrd_lib = lib)
+
+  if (identical(names(x), std)) {
+    cat("\n-Internal standard is the only phase present, defining its concentration as", std_conc, "%")
+    min_concs$df$phase_percent <- std_conc
+    min_concs$df$phase_percent <- std_conc
+
+  }
+
+} else {
+
+  cat("\n-Using internal standard concentration of", std_conc, "% to compute phase concentrations")
+  min_concs <- .qminerals2(x = x, xrd_lib = lib, std = std, std_conc = std_conc)
+
+}
 
 #Extract mineral concentrations (df) and summarised mineral concentrations (dfs)
 df <- min_concs[[1]]
 dfs <- min_concs[[2]]
 
-#### Compute the R statistic. This could be used to identify samples
-# that require manual interpretation
-
-#obs_minus_calc <- (smpl[,2] - fitted_pattern)^2
-#sample_squared <- smpl[,2]^2
-
-#R_fit <- sqrt(sum((sample[,2] - fitted_pattern)^2)/sum(sample[,2]^2))
-
-#Rwp
+#### Compute the Rwp
 R_fit <- sqrt(sum((1/smpl[,2]) * ((smpl[,2] - fitted_pattern)^2)) / sum((1/smpl[,2]) * (smpl[,2]^2)))
 
 #Extract the xrd data
@@ -453,15 +761,37 @@ if (ncol(xrd) == 1) {
   names(xrd) <- df$phase_id[1]
 }
 
+#Create a list of the input arguments
+inputs <- list("harmonise" = harmonise,
+               "solver" = solver,
+               "obj" = obj,
+               "refs" = refs,
+               "std" = std,
+               "std_conc" = std_conc,
+               "tth_align" = tth_align,
+               "align" = align,
+               "manual_align" = manual_align,
+               "tth_fps" = tth_fps,
+               "shift" = shift,
+               "shift_res" = shift_res,
+               "remove_trace" = remove_trace)
+
 
 #Define a list that becomes the function output
-out <- list(smpl[,1], fitted_pattern, smpl[,2], resid_x, df, dfs, R_fit, xrd, x)
-names(out) <- c("tth", "fitted", "measured", "residuals",
-                "phases", "phases_summary", "rwp", "weighted_pure_patterns", "coefficients")
+out <- list("tth" = smpl[,1],
+            "fitted" = unname(fitted_pattern),
+            "measured" = smpl[,2],
+            "residuals" = unname(resid_x),
+            "phases" = df,
+            "phases_grouped" = dfs,
+            "rwp" = R_fit,
+            "weighted_pure_patterns" = xrd,
+            "coefficients" = x,
+            "inputs" = inputs)
 
 #Define the class
 class(out) <- "powdRfps"
-cat("\n-Full pattern summation complete")
+cat("\n***Full pattern summation complete***\n")
 
 return(out)
 

@@ -1,148 +1,209 @@
-.lod <- function(x, smpl, lib, std, amorphous, background, lod) {
 
-  #compute which of the minerals are within the rir vector loaded at the start
-  rir <- lib$phases$rir
-  names(rir) <- lib$phases$phase_id
+#-----------------------------------------------------------------------------------------------
+#LOD 2, which is simpler and groups phases according to their phase name so that some
+#phases with small contributions from mutiple refrence patterns don't get thrown away mistakingly
+#------------------------------------------------------------------------------------------------
 
-  rir <- rir[which(names(rir) %in% names(x))]
+.weighted_rirs <- function(df) {
 
-  #order them alphabetically
-  rir <- rir[order(names(rir), decreasing = FALSE)]
+  df$weighting <- NA
+  df$weighted_rir <- NA
 
-  #Extract the mineral names of the selected phases and order them
-  #alphabetically too
-  phase_names <- lib$phases$phase_name
-  names(phase_names) <- lib$phases$phase_id
+  for (i in 1:length(table(df$phase_name))) {
 
-  phase_names <- phase_names[which(names(phase_names) %in% names(x))]
-  phase_names <- phase_names[order(names(phase_names), decreasing = FALSE)]
+    current_phase <- names(table(df$phase_name))[i]
+    phase_index <- which(df$phase_name == current_phase)
 
-  #order the coefficients so that they match the order of rir's and
-  #minerals names
-  x <- x[order(names(x), decreasing = FALSE)]
-
-  #calculate the mineral percentages based on the rir's
-  phase_percent <- (unname(x)/rir)/sum(unname(x)/rir)*100
-
-  #create a data frame containing the name, ID, percentage and rir of the data
-  df <- data.frame("phase_name" = as.character(phase_names),
-                   "phase_id" = names(rir),
-                   "phase_percent" = as.numeric(phase_percent),
-                   "rir" = as.numeric(rir))
-
-  #create an x_amorphous vector that will be used later in a condition
-  x_amorphous <- c()
-
-  #Remove any amorphous phases if a vector is specified and if any phases in
-  #that vector have made it to this point!
-  if (length(amorphous) > 0 & length(which(df$phase_id %in% amorphous)) > 0) {
-  #Extract these so that they can be added at the end
-  df_amorphous <- df[which(df$phase_id %in% amorphous), ]
-  x_amorphous <- x[which(names(x) %in% amorphous)]
-  lib_amorphous <- lib$xrd[which(names(lib$xrd) %in% amorphous)]
-
-  #Remove amorphous components from data that will be used to compute detection limits
-  df <- df[-which(df$phase_id %in% amorphous), ]
-  x <- x[-which(names(x) %in% amorphous)]
-  lib$xrd <- lib$xrd[-which(names(lib$xrd) %in% amorphous)]
-
-  #Close the data
-  df$phase_percent <- df$phase_percent/sum(df$phase_percent) * 100
-
-  phase_names <- df$phase_name
-  names(phase_names) <- df$phase_id
-
+    df$weighting[phase_index] <- df$phase_percent[phase_index]/sum(df$phase_percent[phase_index])
+    df$weighted_rir[phase_index] <- df$weighting[phase_index] * df$rir[phase_index]
 
   }
 
-  dfs_mean_rir <- stats::aggregate(rir ~ phase_name, data = df, FUN = mean)
-  dfs_total_phase <- stats::aggregate(phase_percent ~ phase_name, data = df, FUN = sum)
+  dfs <- stats::aggregate(list("phase_percent" = df$phase_percent,
+                               "weighted_rir" = df$weighted_rir),
+                          by = list("phase_name" = df$phase_name), FUN = sum)
 
-  dfs <- data.frame("phase_name" = dfs_mean_rir$phase_name,
-                    "phase_percent" = round(dfs_total_phase$phase_percent, 2),
-                    "mean_rir" = round(dfs_mean_rir$rir, 2))
+  dfs$weighted_rir <- round(dfs$weighted_rir, 3)
 
-  #To compute LDD using full patterns, the background signal has to be estimated,
-  #this is done using the bkg function I've written
-
-  #apply the bkg function
-  bkg_fit <- bkg(smpl,
-                 lambda = background$lambda,
-                 hwi = background$hwi,
-                 it = background$it,
-                 int = background$int)$background
-
-  #sum of the background
-  bkg_sum <- sum(bkg_fit)
-
-  #Compute the total signal from the internal standard
-
-  #Get the mineral name of the internal standard
-  std_name <- lib$phases$phase_name[which(lib$phases$phase_id == std)]
-
-  std_index <- which(phase_names == std_name)
-  #Order the optimised (because the phase_names vector is already ordered)
-  x_ordered <- x[order(names(x), decreasing = FALSE)]
-
-  #extract the coefficients and rir's
-  std_coefficients <- x_ordered[std_index]
-  std_rir <- rir[std_index]
-
-  #Get the library of aligned patterns and extract the internal standard patterns from it
-  lib_df <- data.frame(lib$xrd[, order(names(data.frame(lib$xrd)), decreasing = FALSE)])
-
-  std_patterns <- as.matrix(lib_df[, std_index])
-
-  #Calculate the fitted internal standard pattern
-  std_fit <- apply(sweep(std_patterns, 2, std_coefficients, "*"), 1, sum)
-
-  #sum the total counts
-  std_counts <- sum(std_fit)
-
-  #Get the total internal standard percentage currently optimised
-  std_percent <- sum(df$phase_percent[which(df$phase_name == std_name)])
-
-  if (std_percent < 5) {
-    warning("The internal standard is estimated to be lower than 5 wt.% within the sample,
-            which may hinder the accuracy in estimating the lower limit of detection. Consider
-            using an alternative internal standard.")
-  }
-
-  #Estimate the lod (check this equation!!!)
-  std_lod <- (4*sqrt(2*bkg_sum))/(std_counts/std_percent)
-
-  #Now estimate the lod for all phases of the fit
-
-  #calculate the weighted rir which accounts for potentially
-  #different rir's of the same mineral
-
-  std_rir <- dfs$mean_rir[which(dfs$phase_name == std_name)]
-
-  #Then calculate the lod
-  mineral_lod <- std_lod * (df$rir/std_rir)^-1
-
-  names(mineral_lod) <- as.character(df$phase_name)
-
-  df$lod <- as.numeric(mineral_lod)
-
-  #Get the index values of phases that are below lod
-  remove_index <- which(df$phase_percent < (df$lod*lod))
-
-  #This only runs when there are cases to remove
-  if(length(remove_index) > 0) {
-    x_ordered <- x_ordered[-remove_index]
-    lib_df <- lib_df[ ,-remove_index]
-  }
-
-  #Lastly add on the amorphous phases that were held behind
-  if(length(amorphous) > 0 & length(x_amorphous > 0)) {
-  x_ordered <- c(x_ordered, x_amorphous)
-  x_ordered <- x_ordered[order(names(x_ordered))]
-
-  lib_df <- data.frame(lib_df, lib_amorphous)
-  lib_df <- lib_df[, order(names(lib_df))]
-  }
-
-  out <- list("x" = x_ordered, "lib" = lib_df, "background" = bkg_fit)
+  return(dfs)
 
 }
+
+
+.lod <- function(x, lib, std, amorphous, lod, force) {
+
+  if(missing(force)) {
+
+    force <- c()
+
+  }
+
+  #quantify minerals
+  quant <- .qminerals(x = x, xrd_lib = lib)
+
+  #order the data
+  quant$df <- quant$df[order(quant$df$phase_id),]
+
+  x <- x[order(names(x))]
+
+  #Same for lib$xrd and lib$phases
+  lib$xrd <- lib$xrd[order(names(lib$xrd))]
+  lib$phases <- lib$phases[order(lib$phases$phase_id),]
+
+  #Add the amorphous phases as a column in the quant$df table
+ # quant$df$amorphous <- FALSE
+
+  #if(length(which(amorphous %in% quant$df$phase_id)) > 0) {
+   # quant$df$amorphous[which(quant$df$phase_id %in% amorphous)] <- TRUE
+  #}
+
+  #Compute the weighted RIR's
+  dfs_weighted <- .weighted_rirs(quant$df)
+
+  #Extract the RIR of the standard
+  std_rir <- lib$phases$rir[which(lib$phases$phase_id == std)]
+
+  #Compute a vector of lod's for all phases
+  all_lod <- lod * (std_rir/dfs_weighted$weighted_rir)
+  names(all_lod) <- dfs_weighted$phase_name
+
+  #Now remove phases that are below detection limit
+  remove_these_phases <- dfs_weighted$phase_name[which(dfs_weighted$phase_percent < all_lod)]
+
+  #Need to extract the amorphous names instead of the id's identified in the function call
+  amorphous_names <- lib$phases$phase_name[which(lib$phases$phase_id %in% amorphous)]
+
+  force_names <- lib$phases$phase_name[which(lib$phases$phase_id %in% force)]
+
+  #Take amorphous phases out of the remove_these_phases vector if the vector exists and if
+  #it contains any amorphous phases
+  if (length(remove_these_phases) > 0 & length(which(remove_these_phases %in% amorphous_names)) > 0) {
+
+    #Make sure amorphous phases are retained
+    remove_these_phases <- remove_these_phases[-which(remove_these_phases %in% amorphous_names)]
+
+  }
+
+  if (length(remove_these_phases) > 0 & length(which(remove_these_phases %in% force_names)) > 0) {
+
+    #Make sure amorphous phases are retained
+    remove_these_phases <- remove_these_phases[-which(remove_these_phases %in% force_names)]
+
+  }
+
+  #if the remove_these_phases vector still exists afer amorphous phases have been removed from it,
+  #then use it to remove phase below detection limit
+  if (length(remove_these_phases) > 0) {
+
+    remove_these <- which(quant$df$phase_name %in% remove_these_phases)
+
+    cat("\n-Removing phases below detection limit")
+    lib_df <- lib$xrd[-remove_these]
+    x <- x[-remove_these]
+
+  } else {
+
+      lib_df <- lib$xrd
+
+    }
+
+
+  out <- list("x" = x, "lib" = lib_df)
+
+}
+
+
+
+.lod2 <- function(x, lib, std, std_conc, amorphous, lod, force) {
+
+  if(missing(force)) {
+
+    force <- c()
+
+  }
+
+  #quantify minerals using the qminerals2 function, which automatically
+  #excludes any phase associated with the internal standard
+  quant <- .qminerals2(x = x, xrd_lib = lib,
+                       std = std, std_conc = std_conc)
+
+  #order the data
+  quant$df <- quant$df[order(quant$df$phase_id),]
+
+  #Identify any ID's of phases with the same name as std
+  std_name <- lib$phases$phase_name[which(lib$phases$phase_id == std)]
+
+  #Extract all the ids of potential standard patterns
+  std_ids <- lib$phases$phase_id[which(lib$phases$phase_name == std_name)]
+
+  id_match <- which(names(x) %in% std_ids)
+
+  if (length(id_match) < 1) {
+
+    stop("\n-The phases specified as the std is not present. Cannot compute
+         limits of detection.")
+
+  }
+
+  x <- x[order(names(x))]
+
+  #Same for lib$xrd and lib$phases
+  lib$xrd <- lib$xrd[order(names(lib$xrd))]
+  lib$phases <- lib$phases[order(lib$phases$phase_id),]
+
+  #Compute the weighted RIR's
+  dfs_weighted <- .weighted_rirs(quant$df)
+
+  #Extract the RIR of the standard
+  std_rir <- lib$phases$rir[which(lib$phases$phase_id == std)]
+
+  #Compute a vector of lod's for all phases
+  all_lod <- lod * (std_rir/dfs_weighted$weighted_rir)
+  names(all_lod) <- dfs_weighted$phase_name
+
+  #Now remove phases that are below detection limit
+  remove_these_phases <- dfs_weighted$phase_name[which(dfs_weighted$phase_percent < all_lod)]
+
+  #Need to extract the amorphous names instead of the id's identified in the function call
+  amorphous_names <- lib$phases$phase_name[which(lib$phases$phase_id %in% amorphous)]
+
+  force_names <- lib$phases$phase_name[which(lib$phases$phase_id %in% force)]
+
+  #Take amorphous phases out of the remove_these_phases vector if the vector exists and if
+  #it contains any amorphous phases
+  if (length(remove_these_phases) > 0 & length(which(remove_these_phases %in% amorphous_names)) > 0) {
+
+    #Make sure amorphous phases are retained
+    remove_these_phases <- remove_these_phases[-which(remove_these_phases %in% amorphous_names)]
+
+  }
+
+  if (length(remove_these_phases) > 0 & length(which(remove_these_phases %in% force_names)) > 0) {
+
+    #Make sure amorphous phases are retained
+    remove_these_phases <- remove_these_phases[-which(remove_these_phases %in% force_names)]
+
+  }
+
+  #if the remove_these_phases vector still exists afer amorphous phases have been removed from it,
+  #then use it to remove phase below detection limit
+  if (length(remove_these_phases) > 0) {
+
+    remove_these <- quant$df$phase_id[which(quant$df$phase_name %in% remove_these_phases)]
+
+    cat("\n-Removing phases below detection limit")
+    lib_df <- lib$xrd[-which(names(lib$xrd) %in% remove_these)]
+    x <- x[-which(names(x) %in% remove_these)]
+
+  } else {
+
+    lib_df <- lib$xrd
+
+  }
+
+
+  out <- list("x" = x, "lib" = lib_df)
+
+}
+
+

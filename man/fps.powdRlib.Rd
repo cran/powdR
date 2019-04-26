@@ -4,8 +4,9 @@
 \alias{fps.powdRlib}
 \title{Full pattern summation}
 \usage{
-\method{fps}{powdRlib}(lib, smpl, solver, obj, refs, std, tth_align, align,
-  tth_fps, ...)
+\method{fps}{powdRlib}(lib, smpl, harmonise, solver, obj, refs, std,
+  std_conc, tth_align, align, manual_align, tth_fps, shift, shift_res,
+  remove_trace, ...)
 }
 \arguments{
 \item{lib}{A \code{powdRlib} object representing the reference library. Created using the
@@ -13,11 +14,15 @@
 
 \item{smpl}{A data frame. First column is 2theta, second column is counts}
 
-\item{solver}{The optimisation routine to be used. One of \code{c("BFGS", "Nelder-Mead",
-"CG" or "NNLS")}. Default = \code{"BFGS"}.}
+\item{harmonise}{logical parameter defining whether to harmonise the \code{lib} and \code{smpl}.
+Default = \code{TRUE}. Harmonises to the intersecting 2theta range at the coarsest resolution
+available.}
 
-\item{obj}{The objective function to minimise when "BFGS", "Nelder-Mead", or
-"CG" are used as the `solver` argument. One of \code{c("Delta", "R", "Rwp")}.
+\item{solver}{The optimisation routine to be used. One of \code{c("BFGS", "Nelder-Mead",
+"CG", "L-BFGS-B", or "NNLS")}. Default = \code{"BFGS"}.}
+
+\item{obj}{The objective function to minimise when "BFGS", "Nelder-Mead",
+"CG" or "L-BFGS-B" are used as the `solver` argument. One of \code{c("Delta", "R", "Rwp")}.
 Default = \code{"Rwp"}. See Chipera and Bish (2002) and page 247 of Bish and Post (1989)
 for definitions of these functions.}
 
@@ -27,14 +32,32 @@ The ID's must match ID's in the \code{lib$phases$phase_id} column.}
 \item{std}{The phase ID (e.g. "QUA.1") to be used as internal
 standard. Must match an ID provided in the \code{phases} parameter.}
 
+\item{std_conc}{The concentration of the internal standard (if known) in weight percent. If
+unknown then use \code{std_conc = NA}, in which case it will be assumed that all phases sum
+to 100 percent (default).}
+
 \item{tth_align}{A vector defining the minimum and maximum 2theta values to be used during
 alignment. If not defined, then the full range is used.}
 
 \item{align}{The maximum shift that is allowed during initial 2theta
 alignment (degrees). Default = 0.1.}
 
+\item{manual_align}{A logical operator denoting whether to optimise the alignment within the
+negative/position 2theta range defined in the \code{align} argument, or to use the specified
+value of the \code{align} argument for alignment of the sample to the standards. Default
+= \code{FALSE}, i.e. alignment is optimised.}
+
 \item{tth_fps}{A vector defining the minimum and maximum 2theta values to be used during
 full pattern summation. If not defined, then the full range is used.}
+
+\item{shift}{The maximum shift (degrees 2theta) that is allowed during the grid search phases selected
+from the non-negative least squares. Default = 0.05).}
+
+\item{shift_res}{A single integer defining the increase in resolution used during grid search shifting. Higher
+values facilitate finer shifts at the expense of longer computation. Default = 4.}
+
+\item{remove_trace}{A single numeric value representing the limit for the concentration of trace phases to
+be retained, i.e. any mineral with an estimated concentration below `remove_trace` will be omitted. Default = 0.}
 
 \item{...}{other arguments}
 }
@@ -45,11 +68,12 @@ a list with components:
 \item{measured}{a vector of the original XRPD measurement (aligned)}
 \item{residuals}{a vector of the residuals (fitted vs measured)}
 \item{phases}{a dataframe of the phases used to produce the fitted pattern}
-\item{phases_summary}{the phases dataframe grouped by phase_name and summarised (sum)}
+\item{phases_grouped}{the phases dataframe grouped by phase_name and summed}
 \item{rwp}{the Rwp of the fitted vs measured pattern}
 \item{weighted_pure_patterns}{a dataframe of reference patterns used to produce the fitted pattern.
 All patterns have been weighted according to the coefficients used in the fit}
 \item{coefficients}{a named vector of coefficients used to produce the fitted pattern}
+\item{inputs}{a list of input arguments used in the function call}
 }
 \description{
 \code{fps.powdRlib} returns estimates of phase concentrations using full pattern
@@ -58,7 +82,7 @@ summation of X-ray powder diffraction data.
 \details{
 Applies full pattern summation (Chipera & Bish, 2002, 2013; Eberl, 2003) to an XRPD
 sample to quantify phase concentrations. Requires a \code{powdRlib} library of reference
-patterns with pre-measured reference intensity ratios in order to derive mineral
+patterns with reference intensity ratios in order to derive mineral
 concentrations.
 }
 \examples{
@@ -89,6 +113,45 @@ fps_granite <- fps(lib = minerals,
                    refs = minerals$phases$phase_id,
                    std = "QUA.1",
                    align = 0.2)
+
+#Alternatively run all 3 at once using lapply
+
+fps_soils <- lapply(soils, fps,
+                    lib = minerals,
+                    std = "QUA.2",
+                    refs = minerals$phases$phase_id,
+                    align = 0.2)
+
+#Using the rockjock library:
+
+data(rockjock)
+data(rockjock_mixtures)
+
+rockjock_1 <- fps(lib = rockjock,
+                  smpl = rockjock_mixtures$Mix1,
+                  refs = c("ORDERED_MICROCLINE",
+                           "LABRADORITE",
+                           "KAOLINITE_DRY_BRANCH",
+                           "MONTMORILLONITE_WYO",
+                           "ILLITE_1M_RM30",
+                           "CORUNDUM"),
+                  std = "CORUNDUM",
+                  align = 0.3)
+
+#Alternatively you can specify the internal standard
+#concentration if known:
+rockjock_1s <- fps(lib = rockjock,
+                 smpl = rockjock_mixtures$Mix1,
+                 refs = c("ORDERED_MICROCLINE",
+                          "LABRADORITE",
+                          "KAOLINITE_DRY_BRANCH",
+                          "MONTMORILLONITE_WYO",
+                          "ILLITE_1M_RM30",
+                          "CORUNDUM"),
+                 std = "CORUNDUM",
+                 std_conc = 20,
+                 align = 0.3)
+
 }
 }
 \references{
@@ -102,6 +165,6 @@ Chipera, S.J., Bish, D.L., 2002. FULLPAT: A full-pattern quantitative analysis p
 diffraction using measured and calculated patterns. J. Appl. Crystallogr. 35, 744-749.
 doi:10.1107/S0021889802017405
 
-Eberl, D.D., 2003. User's guide to ROCKJOCK - A program for determining quantitative mineralogy from
+Eberl, D.D., 2003. User's guide to RockJock - A program for determining quantitative mineralogy from
 powder X-ray diffraction data. Boulder, CA.
 }

@@ -4,8 +4,9 @@
 \alias{afps.powdRlib}
 \title{Automated full pattern summation}
 \usage{
-\method{afps}{powdRlib}(lib, smpl, solver, obj, std, amorphous, tth_align,
-  align, shift, tth_fps, background, lod, amorphous_lod, ...)
+\method{afps}{powdRlib}(lib, smpl, harmonise, solver, obj, std, force,
+  std_conc, tth_align, align, manual_align, shift, shift_res, tth_fps, lod,
+  amorphous, amorphous_lod, ...)
 }
 \arguments{
 \item{lib}{A \code{powdRlib} object representing the reference library. Created using the
@@ -13,8 +14,12 @@
 
 \item{smpl}{A data frame. First column is 2theta, second column is counts}
 
+\item{harmonise}{logical parameter defining whether to harmonise the \code{lib} and \code{smpl}.
+Default = \code{TRUE}. Harmonises to the intersecting 2theta range at the coarsest resolution
+available.}
+
 \item{solver}{The optimisation routine to be used. One of \code{c("BFGS", "Nelder-Mead",
-"CG")}. Default = \code{"BFGS"}.}
+"CG" or "L-BFGS-B")}. Default = \code{"BFGS"}.}
 
 \item{obj}{The objective function to minimise. One of \code{c("Delta", "R", "Rwp")}.
 Default = \code{"Rwp"}. See Chipera and Bish (2002) and page 247 of Bish and Post (1989)
@@ -23,8 +28,12 @@ for definitions of these functions.}
 \item{std}{The phase ID (e.g. "QUA.1") to be used as internal
 standard. Must match an ID provided in the \code{phases} parameter.}
 
-\item{amorphous}{A character string of any phase id's that should be treated as amorphous. Each must
-match a phase_id in the phases table of `lib`.}
+\item{force}{An optional string of phase ID's specifying which phases should not be forced to
+remain throughout the automated full pattern summation.}
+
+\item{std_conc}{The concentration of the internal standard (if known) in weight percent. If
+unknown then use \code{std_conc = NA}, in which case it will be assumed that all phases sum
+to 100 percent (default).}
 
 \item{tth_align}{A vector defining the minimum and maximum 2theta values to be used during
 alignment. If not defined, then the full range is used.}
@@ -32,19 +41,27 @@ alignment. If not defined, then the full range is used.}
 \item{align}{The maximum shift that is allowed during initial 2theta
 alignment (degrees). Default = 0.1.}
 
+\item{manual_align}{A logical operator denoting whether to optimise the alignment within the
+negative/position 2theta range defined in the \code{align} argument, or to use the specified
+value of the \code{align} argument for alignment of the sample to the standards. Default
+= \code{FALSE}, i.e. alignment is optimised.}
+
 \item{shift}{The maximum shift (degrees 2theta) that is allowed during the grid search phases selected
 from the non-negative least squares. Default = 0.05).}
+
+\item{shift_res}{A single integer defining the increase in resolution used during grid search shifting. Higher
+values facilitate finer shifts at the expense of longer computation. Default = 4.}
 
 \item{tth_fps}{A vector defining the minimum and maximum 2theta values to be used during
 automated full pattern summation. If not defined, then the full range is used.}
 
-\item{background}{a list of parameters used to fit a background to the data. Takes the form
-\code{list(lambda, hwi, it , int)}. If missing, the default used is
-\code{list(lambda = 0.5, hwi = 25, it = 50, int = round(nrow(smpl)/4, 0)).} To tune these parameters
-please see the \code{function}, or the background fitting tab of the \code{run_powdR} shiny app.}
+\item{lod}{Optional parameter used to define the limit of detection (in weight percent) of the internal standard
+(i.e. the phase provided in the \code{std} argument). The \code{lod} value is used to estimate the lod of other
+phases during the fitting process and hence remove reference patterns that are considered below detection limit.
+Default = 0.1. If \code{lod = 0} then limits of detection are not computed.}
 
-\item{lod}{Optional parameter used to tune the lower limit of detection computation.
-Must be greater than 0. Default = 0.3. Lower values represent lower detection limits.}
+\item{amorphous}{A character string of any phase id's that should be treated as amorphous. Each must
+match a phase_id in the phases table of `lib`.}
 
 \item{amorphous_lod}{Optional parameter used to exclude amorphous phases if they are below this
 specified limit (percent). Must be between 0 and 100. Default = 0.}
@@ -56,14 +73,14 @@ a list with components:
 \item{tth}{a vector of the 2theta scale of the fitted data}
 \item{fitted}{a vector of the fitted XRPD pattern}
 \item{measured}{a vector of the original XRPD measurement (aligned)}
-\item{background}{a vector of the fitted background used to estimate limits of detection}
 \item{residuals}{a vector of the residuals (fitted vs measured)}
 \item{phases}{a dataframe of the phases used to produce the fitted pattern}
-\item{phases_summary}{the phases dataframe grouped by phase_name and summarised (sum)}
+\item{phases_grouped}{the phases dataframe grouped by phase_name and summed}
 \item{rwp}{the Rwp of the fitted vs measured pattern}
 \item{weighted_pure_patterns}{a dataframe of reference patterns used to produce the fitted pattern.
 All patterns have been weighted according to the coefficients used in the fit}
 \item{coefficients}{a named vector of coefficients used to produce the fitted pattern}
+\item{inputs}{a list of input arguments used in the function call}
 }
 \description{
 \code{afps.powdRlib} returns estimates of phase concentrations using automated full pattern
@@ -73,7 +90,7 @@ involving mineral quantification from large reference libraries.
 \details{
 Applies automated full pattern summation to an XRPD
 sample to quantify phase concentrations. Requires a \code{powdRlib} library of reference
-patterns with pre-measured reference intensity ratios in order to derive mineral
+patterns with reference intensity ratios in order to derive mineral
 concentrations.
 }
 \examples{
@@ -83,27 +100,62 @@ data(minerals)
 # Load the soils data
 data(soils)
 
-#Since the reference library is relatively small,
-#the whole library can be used at once to get an
-#estimate of the phases within each sample.
 \dontrun{
 afps_sand <-  afps(lib = minerals,
                  smpl = soils$sandstone,
-                 std = "QUA.1",
+                 std = "QUA.2",
+                 align = 0.2,
+                 lod = 0.2,
                  amorphous = "ORG",
-                 align = 0.2)
+                 amorphous_lod = 1)
 
 afps_lime <- afps(lib = minerals,
                 smpl = soils$limestone,
-                std = "QUA.1",
+                std = "QUA.2",
+                align = 0.2,
+                lod = 0.2,
                 amorphous = "ORG",
-                align = 0.2)
+                amorphous_lod = 1)
 
 afps_granite <- afps(lib = minerals,
                    smpl = soils$granite,
-                   std = "QUA.1",
+                   std = "QUA.2",
+                   align = 0.2,
+                   lod = 0.2,
                    amorphous = "ORG",
-                   align = 0.2)
+                   amorphous_lod = 1)
+
+#Alternatively run all 3 at once using lapply
+
+afps_soils <- lapply(soils, afps,
+                     lib = minerals,
+                     std = "QUA.2",
+                     align = 0.2,
+                     lod = 0.2,
+                     amorphous = "ORG",
+                     amorphous_lod = 1)
+
+#Automated quantification using the rockjock library
+
+data(rockjock)
+data(rockjock_mixtures)
+
+#This takes a few minutes to run
+rockjock_a1 <- afps(lib = rockjock,
+                    smpl = rockjock_mixtures$Mix1,
+                    std = "CORUNDUM",
+                    align = 0.3,
+                    lod = 1)
+
+#Quantifying the same sample but defining the internal standard
+#concentration (also takes a few minutes to run):
+rockjock_a1s <- afps(lib = rockjock,
+                     smpl = rockjock_mixtures$Mix1,
+                     std = "CORUNDUM",
+                     std_conc = 20,
+                     align = 0.3,
+                     lod = 1)
+
 }
 }
 \references{
@@ -117,6 +169,6 @@ Chipera, S.J., Bish, D.L., 2002. FULLPAT: A full-pattern quantitative analysis p
 diffraction using measured and calculated patterns. J. Appl. Crystallogr. 35, 744-749.
 doi:10.1107/S0021889802017405
 
-Eberl, D.D., 2003. User's guide to ROCKJOCK - A program for determining quantitative mineralogy from
+Eberl, D.D., 2003. User's guide to RockJock - A program for determining quantitative mineralogy from
 powder X-ray diffraction data. Boulder, CA.
 }

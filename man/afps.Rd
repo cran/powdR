@@ -17,14 +17,14 @@ a list with components:
 \item{tth}{a vector of the 2theta scale of the fitted data}
 \item{fitted}{a vector of the fitted XRPD pattern}
 \item{measured}{a vector of the original XRPD measurement (aligned)}
-\item{background}{a vector of the fitted background used to estimate limits of detection}
 \item{residuals}{a vector of the residuals (fitted vs measured)}
 \item{phases}{a dataframe of the phases used to produce the fitted pattern}
-\item{phases_summary}{the phases dataframe grouped by phase_name and summarised (sum)}
+\item{phases_grouped}{the phases dataframe grouped by phase_name and summed}
 \item{rwp}{the Rwp of the fitted vs measured pattern}
 \item{weighted_pure_patterns}{a dataframe of reference patterns used to produce the fitted pattern.
 All patterns have been weighted according to the coefficients used in the fit}
 \item{coefficients}{a named vector of coefficients used to produce the fitted pattern}
+\item{inputs}{a list of input arguments used in the function call}
 }
 \description{
 \code{afps} returns estimates of phase concentrations using automated full pattern
@@ -35,7 +35,7 @@ see \code{?afps.powdRlib}.
 \details{
 Applies automated full pattern summation to an XRPD
 measurement to quantify phase concentrations. Requires a \code{powdRlib} library of
-reference patterns with pre-measured reference intensity ratios in order to derive
+reference patterns with reference intensity ratios in order to derive
 mineral concentrations.
 }
 \examples{
@@ -45,27 +45,62 @@ data(minerals)
 # Load the soils data
 data(soils)
 
-#Since the reference library is relatively small,
-#the whole library can be used at once to get an
-#estimate of the phases within each sample.
 \dontrun{
 afps_sand <-  afps(lib = minerals,
                  smpl = soils$sandstone,
-                 std = "QUA.1",
+                 std = "QUA.2",
+                 align = 0.2,
+                 lod = 0.2,
                  amorphous = "ORG",
-                 align = 0.2)
+                 amorphous_lod = 1)
 
 afps_lime <- afps(lib = minerals,
                 smpl = soils$limestone,
-                std = "QUA.1",
+                std = "QUA.2",
+                align = 0.2,
+                lod = 0.2,
                 amorphous = "ORG",
-                align = 0.2)
+                amorphous_lod = 1)
 
 afps_granite <- afps(lib = minerals,
                    smpl = soils$granite,
-                   std = "QUA.1",
+                   std = "QUA.2",
+                   align = 0.2,
+                   lod = 0.2,
                    amorphous = "ORG",
-                   align = 0.2)
+                   amorphous_lod = 1)
+
+#Alternatively run all 3 at once using lapply
+
+afps_soils <- lapply(soils, afps,
+                     lib = minerals,
+                     std = "QUA.2",
+                     align = 0.2,
+                     lod = 0.2,
+                     amorphous = "ORG",
+                     amorphous_lod = 1)
+
+#Automated quantification using the rockjock library
+
+data(rockjock)
+data(rockjock_mixtures)
+
+#This takes a few minutes to run
+rockjock_a1 <- afps(lib = rockjock,
+                    smpl = rockjock_mixtures$Mix1,
+                    std = "CORUNDUM",
+                    align = 0.3,
+                    lod = 1)
+
+#Quantifying the same sample but defining the internal standard
+#concentration (also takes a few minutes to run):
+rockjock_a1s <- afps(lib = rockjock,
+                     smpl = rockjock_mixtures$Mix1,
+                     std = "CORUNDUM",
+                     std_conc = 20,
+                     align = 0.3,
+                     lod = 1)
+
 }
 }
 \references{
@@ -77,6 +112,6 @@ Chipera, S.J., Bish, D.L., 2002. FULLPAT: A full-pattern quantitative analysis p
 diffraction using measured and calculated patterns. J. Appl. Crystallogr. 35, 744-749.
 doi:10.1107/S0021889802017405
 
-Eberl, D.D., 2003. User's guide to ROCKJOCK - A program for determining quantitative mineralogy from
+Eberl, D.D., 2003. User's guide to RockJock - A program for determining quantitative mineralogy from
 powder X-ray diffraction data. Boulder, CA.
 }
