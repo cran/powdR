@@ -4,9 +4,26 @@
 \alias{afps.powdRlib}
 \title{Automated full pattern summation}
 \usage{
-\method{afps}{powdRlib}(lib, smpl, harmonise, solver, obj, std, force,
-  std_conc, tth_align, align, manual_align, shift, shift_res, tth_fps, lod,
-  amorphous, amorphous_lod, ...)
+\method{afps}{powdRlib}(
+  lib,
+  smpl,
+  harmonise,
+  solver,
+  obj,
+  std,
+  force,
+  std_conc,
+  tth_align,
+  align,
+  manual_align,
+  shift,
+  shift_res,
+  tth_fps,
+  lod,
+  amorphous,
+  amorphous_lod,
+  ...
+)
 }
 \arguments{
 \item{lib}{A \code{powdRlib} object representing the reference library. Created using the
@@ -28,8 +45,9 @@ for definitions of these functions.}
 \item{std}{The phase ID (e.g. "QUA.1") to be used as internal
 standard. Must match an ID provided in the \code{phases} parameter.}
 
-\item{force}{An optional string of phase ID's specifying which phases should not be forced to
-remain throughout the automated full pattern summation.}
+\item{force}{An optional string of phase ID's or names specifying which phases should be forced to
+remain throughout the automated full pattern summation. The ID's or names supplied must be present
+within the \code{lib$phases$phase_id} or \code{lib$phases$phase_name} columns.}
 
 \item{std_conc}{The concentration of the internal standard (if known) in weight percent. If
 unknown then use \code{std_conc = NA}, in which case it will be assumed that all phases sum
@@ -47,7 +65,7 @@ value of the \code{align} argument for alignment of the sample to the standards.
 = \code{FALSE}, i.e. alignment is optimised.}
 
 \item{shift}{The maximum shift (degrees 2theta) that is allowed during the grid search phases selected
-from the non-negative least squares. Default = 0.05).}
+from the non-negative least squares. Default = 0).}
 
 \item{shift_res}{A single integer defining the increase in resolution used during grid search shifting. Higher
 values facilitate finer shifts at the expense of longer computation. Default = 4.}

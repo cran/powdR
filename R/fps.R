@@ -207,8 +207,9 @@ fps <- function(lib, ...) {
 #' "CG" or "L-BFGS-B" are used as the `solver` argument. One of \code{c("Delta", "R", "Rwp")}.
 #' Default = \code{"Rwp"}. See Chipera and Bish (2002) and page 247 of Bish and Post (1989)
 #' for definitions of these functions.
-#' @param refs A character string of reference pattern ID's from the specified library.
-#' The ID's must match ID's in the \code{lib$phases$phase_id} column.
+#' @param refs A character string of reference pattern ID's or names from the specified library.
+#' The ID's or names supplied must be present within the \code{lib$phases$phase_id} or
+#' \code{lib$phases$phase_name} columns.
 #' @param std The phase ID (e.g. "QUA.1") to be used as internal
 #' standard. Must match an ID provided in the \code{phases} parameter.
 #' @param std_conc The concentration of the internal standard (if known) in weight percent. If
@@ -225,7 +226,7 @@ fps <- function(lib, ...) {
 #' @param tth_fps A vector defining the minimum and maximum 2theta values to be used during
 #' full pattern summation. If not defined, then the full range is used.
 #' @param shift The maximum shift (degrees 2theta) that is allowed during the grid search phases selected
-#' from the non-negative least squares. Default = 0.05).
+#' from the non-negative least squares. Default = 0).
 #' @param shift_res A single integer defining the increase in resolution used during grid search shifting. Higher
 #' values facilitate finer shifts at the expense of longer computation. Default = 4.
 #' @param remove_trace A single numeric value representing the limit for the concentration of trace phases to
@@ -412,6 +413,7 @@ fps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, std_conc,
   if(missing(shift)) {
 
     shift = 0
+
   }
 
   #If shift_res is missing then set it to default
@@ -485,8 +487,8 @@ fps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, std_conc,
 
   #subset lib according to the phases vector
 
-  lib$xrd <- lib$xrd[which(lib$phases$phase_id %in% refs)]
-  lib$phases <- lib$phases[which(lib$phases$phase_id %in% refs), ]
+  lib$xrd <- lib$xrd[which(lib$phases$phase_id %in% refs | lib$phases$phase_name %in% refs)]
+  lib$phases <- lib$phases[which(lib$phases$phase_id %in% refs | lib$phases$phase_name %in% refs), ]
 
 
   #if only one phase is being used, make sure it's a dataframe and named correctly
@@ -575,7 +577,7 @@ lib$tth <- smpl[, 1]
 #if only one phase is being used, make sure it's a dataframe and named correctly
 if (is.vector(lib$xrd)) {
   lib$xrd <- data.frame("phase" = lib$xrd)
-  names(lib$xrd) <- refs
+  names(lib$xrd) <- lib$xrd$phase_id
 }
 
 if (solver %in% c("Nelder-Mead", "BFGS", "CG", "L-BFGS-B")) {

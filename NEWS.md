@@ -1,3 +1,17 @@
+# powdR 1.1.0
+## New features
+* The `refs` argument of `fps()` and `subset()` now accepts phase names as well as phase ID's. For example, if
+  the phase name "Quartz" in supplied, then all phase ID's associated with Quartz will be selected.
+  
+* Similarly, the `force` argument of `afps()` now accepts both phase names and phase ID's.
+
+* `summarise_mineralogy()` now contains an optional `rwp` argument (default = `FALSE`). This is a logical
+  parameter used to define whether the Rwp should be included in the summary table as a measure of the
+  difference between the measured and fitted patterns.
+  
+* When the `std_conc` argument is supplied to `fps()` or `afps()`, the computed phase concentrations now
+  include that of the internal standard.
+
 # powdR 1.0.0
 
 ## New features
@@ -20,7 +34,7 @@
 
 *  `fps()` now contains an optional `shift` argument, identical to that already implemented in
    `afps()`. This defines the 2$\theta$ range within with a grid-search algorithm can optimise the
-    aligment of standards to the sample. If not defined in the function call it defaults to 0.
+    alignment of standards to the sample. If not defined in the function call it defaults to 0.
     
 *  `fps()` and `afps()` now have a `shift_res` argument which accepts a single integer to define
    the increase in resolution used during grid search shifting. Higher values facilitate finer

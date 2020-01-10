@@ -131,8 +131,9 @@ afps <- function(lib, ...) {
 #' for definitions of these functions.
 #' @param std The phase ID (e.g. "QUA.1") to be used as internal
 #' standard. Must match an ID provided in the \code{phases} parameter.
-#' @param force An optional string of phase ID's specifying which phases should not be forced to
-#' remain throughout the automated full pattern summation.
+#' @param force An optional string of phase ID's or names specifying which phases should be forced to
+#' remain throughout the automated full pattern summation. The ID's or names supplied must be present
+#' within the \code{lib$phases$phase_id} or \code{lib$phases$phase_name} columns.
 #' @param std_conc The concentration of the internal standard (if known) in weight percent. If
 #' unknown then use \code{std_conc = NA}, in which case it will be assumed that all phases sum
 #' to 100 percent (default).
@@ -145,7 +146,7 @@ afps <- function(lib, ...) {
 #' value of the \code{align} argument for alignment of the sample to the standards. Default
 #' = \code{FALSE}, i.e. alignment is optimised.
 #' @param shift The maximum shift (degrees 2theta) that is allowed during the grid search phases selected
-#' from the non-negative least squares. Default = 0.05).
+#' from the non-negative least squares. Default = 0).
 #' @param shift_res A single integer defining the increase in resolution used during grid search shifting. Higher
 #' values facilitate finer shifts at the expense of longer computation. Default = 4.
 #' @param tth_fps A vector defining the minimum and maximum 2theta values to be used during
@@ -258,6 +259,12 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, std, force, std_con
   if (missing(force)) {
 
     force <- c()
+
+  }
+
+  if (length(force) > 0) {
+
+    force <- lib$phases$phase_id[which(lib$phases$phase_id %in% force | lib$phases$phase_name %in% force)]
 
   }
 

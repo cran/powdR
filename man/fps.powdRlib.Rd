@@ -4,9 +4,24 @@
 \alias{fps.powdRlib}
 \title{Full pattern summation}
 \usage{
-\method{fps}{powdRlib}(lib, smpl, harmonise, solver, obj, refs, std,
-  std_conc, tth_align, align, manual_align, tth_fps, shift, shift_res,
-  remove_trace, ...)
+\method{fps}{powdRlib}(
+  lib,
+  smpl,
+  harmonise,
+  solver,
+  obj,
+  refs,
+  std,
+  std_conc,
+  tth_align,
+  align,
+  manual_align,
+  tth_fps,
+  shift,
+  shift_res,
+  remove_trace,
+  ...
+)
 }
 \arguments{
 \item{lib}{A \code{powdRlib} object representing the reference library. Created using the
@@ -26,8 +41,9 @@ available.}
 Default = \code{"Rwp"}. See Chipera and Bish (2002) and page 247 of Bish and Post (1989)
 for definitions of these functions.}
 
-\item{refs}{A character string of reference pattern ID's from the specified library.
-The ID's must match ID's in the \code{lib$phases$phase_id} column.}
+\item{refs}{A character string of reference pattern ID's or names from the specified library.
+The ID's or names supplied must be present within the \code{lib$phases$phase_id} or
+\code{lib$phases$phase_name} columns.}
 
 \item{std}{The phase ID (e.g. "QUA.1") to be used as internal
 standard. Must match an ID provided in the \code{phases} parameter.}
@@ -51,7 +67,7 @@ value of the \code{align} argument for alignment of the sample to the standards.
 full pattern summation. If not defined, then the full range is used.}
 
 \item{shift}{The maximum shift (degrees 2theta) that is allowed during the grid search phases selected
-from the non-negative least squares. Default = 0.05).}
+from the non-negative least squares. Default = 0).}
 
 \item{shift_res}{A single integer defining the increase in resolution used during grid search shifting. Higher
 values facilitate finer shifts at the expense of longer computation. Default = 4.}
