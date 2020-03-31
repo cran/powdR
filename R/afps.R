@@ -123,14 +123,18 @@ afps <- function(lib, ...) {
 #' @param smpl A data frame. First column is 2theta, second column is counts
 #' @param harmonise logical parameter defining whether to harmonise the \code{lib} and \code{smpl}.
 #' Default = \code{TRUE}. Harmonises to the intersecting 2theta range at the coarsest resolution
-#' available.
+#' available using natural splines.
 #' @param solver The optimisation routine to be used. One of \code{c("BFGS", "Nelder-Mead",
-#' "CG" or "L-BFGS-B")}. Default = \code{"BFGS"}.
+#' or "CG")}. Default = \code{"BFGS"}.
 #' @param obj The objective function to minimise. One of \code{c("Delta", "R", "Rwp")}.
 #' Default = \code{"Rwp"}. See Chipera and Bish (2002) and page 247 of Bish and Post (1989)
 #' for definitions of these functions.
+#' @param refs A character string of reference pattern ID's or names from the specified library.
+#' The ID's or names supplied must be present within the \code{lib$phases$phase_id} or
+#' \code{lib$phases$phase_name} columns. If missing from the function call then all phases in
+#' the reference library will be used.
 #' @param std The phase ID (e.g. "QUA.1") to be used as internal
-#' standard. Must match an ID provided in the \code{phases} parameter.
+#' standard. Must match an ID provided in the \code{refs} parameter.
 #' @param force An optional string of phase ID's or names specifying which phases should be forced to
 #' remain throughout the automated full pattern summation. The ID's or names supplied must be present
 #' within the \code{lib$phases$phase_id} or \code{lib$phases$phase_name} columns.
@@ -138,25 +142,23 @@ afps <- function(lib, ...) {
 #' unknown then use \code{std_conc = NA}, in which case it will be assumed that all phases sum
 #' to 100 percent (default).
 #' @param tth_align A vector defining the minimum and maximum 2theta values to be used during
-#' alignment. If not defined, then the full range is used.
+#' alignment (e.g. \code{c(5,65)}). If not defined, then the full range is used.
 #' @param align The maximum shift that is allowed during initial 2theta
 #' alignment (degrees). Default = 0.1.
 #' @param manual_align A logical operator denoting whether to optimise the alignment within the
 #' negative/position 2theta range defined in the \code{align} argument, or to use the specified
 #' value of the \code{align} argument for alignment of the sample to the standards. Default
 #' = \code{FALSE}, i.e. alignment is optimised.
-#' @param shift The maximum shift (degrees 2theta) that is allowed during the grid search phases selected
-#' from the non-negative least squares. Default = 0).
-#' @param shift_res A single integer defining the increase in resolution used during grid search shifting. Higher
-#' values facilitate finer shifts at the expense of longer computation. Default = 4.
+#' @param shift A single numeric value denoting the maximum (positive or negative) shift,
+#' in degrees 2theta, that is allowed during the shifting of selected phases. Default = 0.
 #' @param tth_fps A vector defining the minimum and maximum 2theta values to be used during
-#' automated full pattern summation. If not defined, then the full range is used.
+#' automated full pattern summation (e.g. \code{c(5,65)}). If not defined, then the full range is used.
 #' @param lod Optional parameter used to define the limit of detection (in weight percent) of the internal standard
 #' (i.e. the phase provided in the \code{std} argument). The \code{lod} value is used to estimate the lod of other
 #' phases during the fitting process and hence remove reference patterns that are considered below detection limit.
 #' Default = 0.1. If \code{lod = 0} then limits of detection are not computed.
-#' @param amorphous A character string of any phase id's that should be treated as amorphous. Each must
-#' match a phase_id in the phases table of `lib`.
+#' @param amorphous A character string of any phase ID's that should be treated as amorphous. These must
+#' match phases present in \code{lib$phases$phase_id}.
 #' @param amorphous_lod Optional parameter used to exclude amorphous phases if they are below this
 #' specified limit (percent). Must be between 0 and 100. Default = 0.
 #' @param ... other arguments
@@ -164,10 +166,10 @@ afps <- function(lib, ...) {
 #' @return a list with components:
 #' \item{tth}{a vector of the 2theta scale of the fitted data}
 #' \item{fitted}{a vector of the fitted XRPD pattern}
-#' \item{measured}{a vector of the original XRPD measurement (aligned)}
+#' \item{measured}{a vector of the original XRPD measurement (aligned and harmonised)}
 #' \item{residuals}{a vector of the residuals (fitted vs measured)}
-#' \item{phases}{a dataframe of the phases used to produce the fitted pattern}
-#' \item{phases_grouped}{the phases dataframe grouped by phase_name and summed}
+#' \item{phases}{a dataframe of the phases used to produce the fitted pattern and their concentrations}
+#' \item{phases_grouped}{the phases dataframe grouped by phase_name and concentrations summed}
 #' \item{rwp}{the Rwp of the fitted vs measured pattern}
 #' \item{weighted_pure_patterns}{a dataframe of reference patterns used to produce the fitted pattern.
 #' All patterns have been weighted according to the coefficients used in the fit}
@@ -252,9 +254,10 @@ afps <- function(lib, ...) {
 #' Eberl, D.D., 2003. User's guide to RockJock - A program for determining quantitative mineralogy from
 #' powder X-ray diffraction data. Boulder, CA.
 #' @export
-afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, std, force, std_conc,
-                         tth_align, align, manual_align, shift, shift_res, tth_fps, lod,
-                         amorphous, amorphous_lod, ...) {
+afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, force, std_conc,
+                         tth_align, align, manual_align, shift,
+                         tth_fps, lod, amorphous, amorphous_lod, ...) {
+
 
   if (missing(force)) {
 
@@ -353,9 +356,10 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, std, force, std_con
 
   #If a solver other than NNLS is being used but the objective function
   #not defined, then used Rwp
-  if(missing(obj) & solver %in% c("Nelder-Mead", "BFGS", "CG", "L-BFGS-B")) {
+  if(missing(obj)) {
 
     obj = "Rwp"
+
   }
 
   #If shift is missing then set it to default
@@ -365,10 +369,12 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, std, force, std_con
 
   }
 
-  #If shift_res is missing then set it to default
-  if(missing(shift_res)) {
+  #If refs are not defined or "all" then use all of them
+  if(missing(refs)) {
 
-    shift_res = 4
+    cat("\n-Using all reference patterns in the library")
+    refs = lib$phases$phase_id
+
   }
 
   #If lod is missing then set it to a default of 1
@@ -396,7 +402,14 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, std, force, std_con
 
   #Make only "Nelder-Mead", "BFGS", "CG" or "L-BFGS-B" optional for the solver
   if (!solver %in% c("Nelder-Mead", "BFGS", "CG", "L-BFGS-B")) {
-    stop("The solver argument must be one of 'BFGS', 'Nelder Mead', 'CG' or 'L-BFGS-B'")
+    stop("The solver argument must be one of 'BFGS', 'Nelder Mead' or 'CG'")
+  }
+
+  if (solver == "L-BFGS-B") {
+
+    cat("\n-The 'L-BFGS-B' option for solver has deprecated.
+        Using 'BFGS' instead.")
+
   }
 
   if (is.na(std_conc)) {
@@ -415,6 +428,11 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, std, force, std_con
   }
 
   }
+
+  #subset lib according to the refs vector
+
+  lib$xrd <- lib$xrd[which(lib$phases$phase_id %in% c(refs, force) | lib$phases$phase_name %in% refs)]
+  lib$phases <- lib$phases[which(lib$phases$phase_id %in% c(refs, force) | lib$phases$phase_name %in% refs), ]
 
 
   #Make sure that the phase identified as the internal standard is contained within the reference library
@@ -481,16 +499,17 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, std, force, std_con
 
   if (align > 0) {
 
-  xrd_ref_names <- lib$phases$phase_id
+  #xrd_ref_names <- lib$phases$phase_id
 
   #Ensure that samples in the reference library are on the same scale as the sample
   cat("\n-Interpolating library to same 2theta scale as aligned sample")
-  lib$xrd <- data.frame(lapply(names(lib$xrd),
-                               function(n) stats::approx(x = lib$tth,
-                                                         y = unname(unlist(lib$xrd[n])),
+  lib$xrd <- data.frame(lapply(lib$xrd,
+                               function(n) stats::spline(x = lib$tth,
+                                                         y = n,
+                                                         method = "natural",
                                                          xout = smpl_tth)[[2]]))
 
-  names(lib$xrd) <- xrd_ref_names
+  #names(lib$xrd) <- xrd_ref_names
 
   #Replace the library tth with that of the sample
   lib$tth <- smpl_tth
@@ -531,29 +550,57 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, std, force, std_con
     x <- rep(0, ncol(lib$xrd))
     names(x) <- names(lib$xrd)
 
-    if (solver %in% c("Nelder-Mead", "BFGS", "CG")) {
+      #Optimise weighting and shifts if these conditions are met
+      #if (shift_mode == "optimise" & shift > 0 & length(x) > 1) {
 
-    cat("\n-Optimising...")
-    o <- stats::optim(par = x, .fullpat,
-                      method = solver, pure_patterns = lib$xrd,
-                      sample_pattern = smpl[, 2], obj = obj)
+        #Create x_s parameters
+       # x_s <- x
+        #names(x_s) <- paste0(names(x), "_s")
 
-    } else {
+        #cat("\n-Optimising weighting and shifting coefficients...")
+        #o <- stats::optim(par = c(x,x_s), .fullpat_shift_optim,
+        #                  method = solver, lib = lib,
+        #                  smpl = smpl, obj = obj)
 
-    cat("\n-Optimising using L-BFGS-B constrained to a lower limit of zero...")
-    o <- stats::optim(par = x, .fullpat,
-                      method = solver, lower = 0, pure_patterns = lib$xrd,
-                      sample_pattern = smpl[, 2], obj = obj)
+        #x <- o$par
 
-    }
+        #Extract the shifted data
+        #cat("\n-Harmonising library and sample to same 2theta axis")
+        #shifted <- .fullpat_shift(smpl = smpl, lib = lib,
+        #                          par_shift = x[((length(x)/2)+1):length(x)],
+        #                          limit = shift)
 
-    x <- o$par
+        #lib <- shifted$lib
+        #smpl <- shifted$smpl
+
+        #Now extract just the weighting coefficients
+        #x <- x[1:ncol(lib$xrd)]
+
+        #Now make sure negative coefficients are (almost) zero again
+        #if (length(which(x < 0)) > 0) {
+
+        #  x[which(x < 0)] <- 1*10^-16
+
+        #}
+
+      #} else {
+
+        cat("\n-Optimising...")
+
+        o <- stats::optim(par = x, .fullpat,
+                          method = solver, pure_patterns = lib$xrd,
+                          sample_pattern = smpl[, 2], obj = obj)
+
+        x <- o$par
+
+      #}
 
 
-
-  #--------------------------------------------------------------------------------------------
+#-------------------------------------------------------
   #Remove negative/zero parameters
-  #--------------------------------------------------------------------------------------------
+#-------------------------------------------------------
+
+  if (min(x) < 0) {
 
   remove_neg_out <- .remove_neg(x = x, lib = lib, smpl = smpl,
                                 solver = solver, obj = obj, force = force)
@@ -561,55 +608,84 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, std, force, std_con
   x <- remove_neg_out[[1]]
   lib <- remove_neg_out[[2]]
 
+  }
+
   #--------------------------------------------
-  #Grid-search shifting
+  #Shifting
   #--------------------------------------------
 
   #Alignment and then another optimisation ONLY if the shift parameter
   #is included
 
-  if(shift > 0) {
+  if(shift > 0 & length(x) > 1) {
 
-    fpf_aligned <- .shift(smpl = smpl,
-                          lib = lib,
-                          max_shift = shift,
-                          x = x,
-                          res = shift_res,
-                          obj = obj)
+    #fpf_aligned <- .shift(smpl = smpl,
+    #                      lib = lib,
+    #                      max_shift = shift,
+    #                      x = x,
+    #                      res = shift_res,
+    #                      obj = obj)
 
-    smpl <- fpf_aligned[["smpl"]]
-    lib$xrd <- data.frame(fpf_aligned[["lib"]])
-    lib$tth <- smpl[,1]
+    #smpl <- fpf_aligned[["smpl"]]
+    #lib$xrd <- data.frame(fpf_aligned[["lib"]])
+    #lib$tth <- smpl[,1]
 
-  }
+    #This will replace the grid search shifting
+    cat("\n-Optimising shifting coefficients...")
+    x_s <- rep(0, length(x))
+    names(x_s) <- names(x)
+
+    o <- stats::optim(par = x_s, .fullpat_shift_seq,
+                      weightings = x,
+                      method = solver, lib = lib,
+                      smpl = smpl, obj = obj)
+
+    x_s <- o$par
+
+    #Make sure any large shifts are avoided
+    if (length(which(x_s > abs(shift) | x_s < -abs(shift))) > 0) {
+
+      x_s[which(x_s > abs(shift) | x_s < -abs(shift))] <- 0
+
+    }
+
+    #Extract the shifted data
+    cat("\n-Harmonising library and sample to same 2theta axis")
+    shifted <- .fullpat_shift(smpl = smpl, lib = lib,
+                              par_shift = x_s)
+
+    lib <- shifted$lib
+    smpl <- shifted$smpl
+
+  #}
 
 
   #----------------------------------------------
   #Re-optimise after shifting
   #----------------------------------------------
 
-  if(shift > 0) {
+  #if(shift > 0 & shift_mode == "grid" & length(x) > 1) {
 
-    if (solver %in% c("Nelder-Mead", "BFGS", "CG")) {
+  cat("\n-Reoptimising after shifting data")
 
-      cat("\n-Reoptimising after shifting data")
+  o <- stats::optim(par = x, .fullpat,
+                    method = solver, pure_patterns = lib$xrd,
+                    sample_pattern = smpl[, 2], obj = obj)
 
-      o <- stats::optim(par = x, .fullpat,
-                        method = solver, pure_patterns = lib$xrd,
-                        sample_pattern = smpl[, 2], obj = obj)
+  x <- o$par
 
-    } else {
 
-      cat("\n-Reoptimising after shifting data. Using L-BFGS-B constrained
-        to a lower limit of zero")
+  #Now remove negative parameters if they exist
+  if (min(x) < 0) {
 
-      o <- stats::optim(par = x, .fullpat,
-                        method = solver, lower = 0, pure_patterns = lib$xrd,
-                        sample_pattern = smpl[, 2], obj = obj)
+        remove_neg_out <- .remove_neg(x = x, lib = lib, smpl = smpl,
+                                      solver = solver, obj = obj,
+                                      force = force)
 
-    }
+        x <- remove_neg_out[[1]]
+        lib <- remove_neg_out[[2]]
 
-    x <- o$par
+  }
 
   }
 
@@ -650,24 +726,11 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, std, force, std_con
 
   if (logical_reoptimise == FALSE) {
 
-  if (solver %in% c("Nelder-Mead", "BFGS", "CG")) {
-
   cat("\n-Reoptimising after removing crystalline phases below the limit of detection")
 
   o <- stats::optim(par = x, .fullpat,
                     method = solver, pure_patterns = lib$xrd,
                     sample_pattern = smpl[, 2], obj = obj)
-
-  } else {
-
-  cat("\n--Reoptimising after removing crystalline phases below the limit of detection. Using L-BFGS-B
-      constrained to a lower limit of zero")
-
-  o <- stats::optim(par = x, .fullpat,
-                    method = solver, lower = 0, pure_patterns = lib$xrd,
-                    sample_pattern = smpl[, 2], obj = obj)
-
-  }
 
   x <- o$par
 
@@ -724,12 +787,14 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, std, force, std_con
 
 
   #Remove negative parameters again because some can creep in late-on
+  if (min(x) < 0) {
   remove_neg_out <- .remove_neg(x = x, lib = lib, smpl = smpl,
-                                  solver = solver, obj = obj,
+                                solver = solver, obj = obj,
                                 force = force)
 
   x <- remove_neg_out[[1]]
   lib <- remove_neg_out[[2]]
+  }
 
   #compute fitted pattern and residuals
   fitted_pattern <- apply(sweep(as.matrix(lib$xrd), 2, x, "*"), 1, sum)
@@ -795,7 +860,6 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, std, force, std_con
                  "align" = align,
                  "manual_align" = manual_align,
                  "shift" = shift,
-                 "shift_res" = shift_res,
                  "tth_fps" = tth_fps,
                  "lod" = lod,
                  "amorphous" = amorphous,

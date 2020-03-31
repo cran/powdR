@@ -1,4 +1,14 @@
+# powdR 1.2.0
+
+## New features
+* `fps()` and `afps()` no longer require the `shift_res` argument.
+* Shifting is now calculated by optimisation of the objective function.
+* Natural splines are now used instead of linear splines throughout `fps()` and `afps()`.
+* The Full Pattern Summation tab in the Shiny application has been updated, as has the video
+  tutorial for it.
+
 # powdR 1.1.0
+
 ## New features
 * The `refs` argument of `fps()` and `subset()` now accepts phase names as well as phase ID's. For example, if
   the phase name "Quartz" in supplied, then all phase ID's associated with Quartz will be selected.

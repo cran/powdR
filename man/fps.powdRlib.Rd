@@ -18,7 +18,6 @@
   manual_align,
   tth_fps,
   shift,
-  shift_res,
   remove_trace,
   ...
 )
@@ -31,29 +30,30 @@
 
 \item{harmonise}{logical parameter defining whether to harmonise the \code{lib} and \code{smpl}.
 Default = \code{TRUE}. Harmonises to the intersecting 2theta range at the coarsest resolution
-available.}
+available using natural splines.}
 
 \item{solver}{The optimisation routine to be used. One of \code{c("BFGS", "Nelder-Mead",
-"CG", "L-BFGS-B", or "NNLS")}. Default = \code{"BFGS"}.}
+"CG", or "NNLS")}. Default = \code{"BFGS"}.}
 
 \item{obj}{The objective function to minimise when "BFGS", "Nelder-Mead",
-"CG" or "L-BFGS-B" are used as the `solver` argument. One of \code{c("Delta", "R", "Rwp")}.
+or "CG" are used as the `solver` argument. One of \code{c("Delta", "R", "Rwp")}.
 Default = \code{"Rwp"}. See Chipera and Bish (2002) and page 247 of Bish and Post (1989)
 for definitions of these functions.}
 
 \item{refs}{A character string of reference pattern ID's or names from the specified library.
 The ID's or names supplied must be present within the \code{lib$phases$phase_id} or
-\code{lib$phases$phase_name} columns.}
+\code{lib$phases$phase_name} columns. If missing from the function call then all phases in
+the reference library will be used.}
 
 \item{std}{The phase ID (e.g. "QUA.1") to be used as internal
-standard. Must match an ID provided in the \code{phases} parameter.}
+standard. Must match an ID provided in the \code{refs} parameter.}
 
 \item{std_conc}{The concentration of the internal standard (if known) in weight percent. If
-unknown then use \code{std_conc = NA}, in which case it will be assumed that all phases sum
-to 100 percent (default).}
+unknown then use \code{std_conc = NA} (default), in which case it will be assumed that all phases sum
+to 100 percent.}
 
 \item{tth_align}{A vector defining the minimum and maximum 2theta values to be used during
-alignment. If not defined, then the full range is used.}
+alignment (e.g. \code{c(5,65)}). If not defined, then the full range is used.}
 
 \item{align}{The maximum shift that is allowed during initial 2theta
 alignment (degrees). Default = 0.1.}
@@ -64,16 +64,14 @@ value of the \code{align} argument for alignment of the sample to the standards.
 = \code{FALSE}, i.e. alignment is optimised.}
 
 \item{tth_fps}{A vector defining the minimum and maximum 2theta values to be used during
-full pattern summation. If not defined, then the full range is used.}
+full pattern summation (e.g. \code{c(5,65)}). If not defined, then the full range is used.}
 
-\item{shift}{The maximum shift (degrees 2theta) that is allowed during the grid search phases selected
-from the non-negative least squares. Default = 0).}
+\item{shift}{A single numeric value denoting the maximum (positive or negative) shift,
+in degrees 2theta, that is allowed during the shifting of selected phases. Default = 0.}
 
-\item{shift_res}{A single integer defining the increase in resolution used during grid search shifting. Higher
-values facilitate finer shifts at the expense of longer computation. Default = 4.}
-
-\item{remove_trace}{A single numeric value representing the limit for the concentration of trace phases to
-be retained, i.e. any mineral with an estimated concentration below `remove_trace` will be omitted. Default = 0.}
+\item{remove_trace}{A single numeric value representing the limit for the concentration
+of trace phases to be retained, i.e. any mineral with an estimated concentration below
+\code{remove_trace} will be omitted. Default = 0.}
 
 \item{...}{other arguments}
 }
@@ -83,8 +81,8 @@ a list with components:
 \item{fitted}{a vector of the fitted XRPD pattern}
 \item{measured}{a vector of the original XRPD measurement (aligned)}
 \item{residuals}{a vector of the residuals (fitted vs measured)}
-\item{phases}{a dataframe of the phases used to produce the fitted pattern}
-\item{phases_grouped}{the phases dataframe grouped by phase_name and summed}
+\item{phases}{a dataframe of the phases used to produce the fitted pattern and their concentrations}
+\item{phases_grouped}{the phases dataframe grouped by phase_name and concentrations summed}
 \item{rwp}{the Rwp of the fitted vs measured pattern}
 \item{weighted_pure_patterns}{a dataframe of reference patterns used to produce the fitted pattern.
 All patterns have been weighted according to the coefficients used in the fit}
