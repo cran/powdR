@@ -96,7 +96,7 @@ shiny::shinyServer(function(input, output, session) {
   #if it is, update the selectInput
   if(class(lib_plotter_load()) == "powdRlib") {
     shiny::updateSelectInput(session, "selectPHASES_plotter",
-                             label = paste("Choose phases from the library to plot."),
+                             label = NULL,
                              choices = paste0(lib_plotter_load()[[3]][[2]], ": ",
                                               lib_plotter_load()[[3]][[1]]),
                              selected = head(paste0(lib_plotter_load()[[3]][[2]], ": ",
@@ -113,6 +113,10 @@ shiny::shinyServer(function(input, output, session) {
 
     #Subset the library based on the selection
     lib_sub <- lib_plotter_load()
+
+    if (length(which(gsub(".*: ", "", input$selectPHASES_plotter) %in% lib_sub$phases$phase_id)) < 1) {
+      return(NULL)
+    }
 
     if (length(input$selectPHASES_plotter > 0)) {
       lib_sub$xrd <- lib_sub$xrd[which(names(lib_sub$xrd) %in% gsub(".*: ", "", input$selectPHASES_plotter))]
@@ -148,11 +152,10 @@ shiny::shinyServer(function(input, output, session) {
       #if it is, update the selectInput
       if(class(lib_editor_load()) == "powdRlib") {
         shiny::updateSelectInput(session, "selectPHASES_editor",
-                                 label = paste("Select reference patterns to subset"),
+                                 label = NULL,
                                  choices = paste0(lib_editor_load()[[3]][[2]], ": ",
                                                   lib_editor_load()[[3]][[1]]),
-                                 selected = head(paste0(lib_editor_load()[[3]][[2]], ": ",
-                                                        lib_editor_load()[[3]][[1]]), 1))
+                                 selected = NULL)
         }
 
       #Create a powdRlib object
@@ -186,59 +189,47 @@ shiny::shinyServer(function(input, output, session) {
     #-------------------------------
 
     shiny::observe({
-      soils <- powdR::soils
-      output$download_soil_sand <- shiny::downloadHandler(
+      output$download_sandstone <- shiny::downloadHandler(
         filename = function() {
-          paste("sandstone_example_", Sys.Date(), ".xy", sep="")
+          paste("sandstone", Sys.Date(), ".xy", sep="")
         },
         content = function(file) {
           write.table(soils$sandstone, file, sep = " ", col.names = FALSE, row.names = FALSE)
         }
       )
 
-      #Downloads of example limestone data
-      output$download_soil_lime <- shiny::downloadHandler(
+      output$download_limestone <- shiny::downloadHandler(
         filename = function() {
-          paste("limestone_example_", Sys.Date(), ".xy", sep="")
+          paste("limestone", Sys.Date(), ".xy", sep="")
         },
         content = function(file) {
           write.table(soils$limestone, file, sep = " ", col.names = FALSE, row.names = FALSE)
         }
       )
 
-      #Downloads of example granite data
-      output$download_soil_granite <- shiny::downloadHandler(
+      output$download_granite <- shiny::downloadHandler(
         filename = function() {
-          paste("granite_example_", Sys.Date(), ".xy", sep="")
+          paste("granite", Sys.Date(), ".xy", sep="")
         },
         content = function(file) {
           write.table(soils$granite, file, sep = " ", col.names = FALSE, row.names = FALSE)
         }
       )
 
-      output$download_rj_mix1 <- shiny::downloadHandler(
-        filename = function() {
-          paste("rockjock_mix1_", Sys.Date(), ".xy", sep="")
-        },
-        content = function(file) {
-          write.table(rockjock_mixtures$Mix1, file, sep = " ", col.names = FALSE, row.names = FALSE)
-        }
-      )
-
-      output$download_rj_mix2 <- shiny::downloadHandler(
-        filename = function() {
-          paste("rockjock_mix1_", Sys.Date(), ".xy", sep="")
-        },
-        content = function(file) {
-          write.table(rockjock_mixtures$Mix2, file, sep = " ", col.names = FALSE, row.names = FALSE)
-        }
-      )
     })
 
     #Download an example reference library
     shiny::observe({
-      minerals <- powdR::minerals
-      output$download_example_ref <- shiny::downloadHandler(
+
+      output$download_rockjock <- shiny::downloadHandler(
+        filename = "rockjock_powdRlib.Rdata",
+        content = function(con) {
+          assign("rockjock_powdRlib", rockjock)
+          save(list="rockjock_powdRlib", file=con)
+        }
+      )
+
+      output$download_mineral_library <- shiny::downloadHandler(
         filename = "example_powdRlib.Rdata",
         content = function(con) {
           assign("example_powdRlib", minerals)
@@ -246,13 +237,6 @@ shiny::shinyServer(function(input, output, session) {
         }
       )
 
-      output$download_rj_lib <- shiny::downloadHandler(
-        filename = "rockjock_powdRlib.Rdata",
-        content = function(con) {
-          assign("rockjock", rockjock)
-          save(list="rockjock", file=con)
-        }
-      )
     })
 
 
@@ -261,15 +245,26 @@ shiny::shinyServer(function(input, output, session) {
     #---------------------------------------------------
 
     #Load the .xy sample file
+
     filedata2 <- shiny::reactive({
       infile2 <- input$loadXY
       if (is.null(infile2)) {
         #User has not uploaded a file yet
         return(NULL)
       }
-      csv1 <- read.csv(infile2$datapath, sep = " ", header = FALSE)
+
+      csv1 <- lapply(infile2$datapath, read.csv, sep = " ", header = FALSE)
+      names(csv1) <- substr(infile2$name, 1, nchar(infile2$name)-3)
       return(csv1)
     })
+
+    shiny::observe({
+      shiny::updateSelectInput(session, "selectOUTPUT_fps",
+                               label = NULL,
+                               choices = names(filedata2()))
+    })
+
+
 
     #If a library has been uploaded, then create a reactive library
     filedata3 <- shiny::reactive({
@@ -289,14 +284,14 @@ shiny::shinyServer(function(input, output, session) {
       if (input$selectMode_fps == "Automated") {
         return(shiny::updateSelectInput(session, "selectSolver_fps",
                                         label = NULL,
-                                        choices = c("BFGS", "Nelder-Mead", "CG", "L-BFGS-B"),
+                                        choices = c("BFGS", "Nelder-Mead", "CG"),
                                         selected = "BFGS"))
       }
 
       if (input$selectMode_fps == "Manual") {
         return(shiny::updateSelectInput(session, "selectSolver_fps",
                                         label = NULL,
-                                        choices = c("BFGS", "Nelder-Mead", "CG", "L-BFGS-B", "NNLS"),
+                                        choices = c("BFGS", "Nelder-Mead", "CG", "NNLS"),
                                         selected = "BFGS"))
       }
     })
@@ -350,51 +345,32 @@ shiny::shinyServer(function(input, output, session) {
 
         return(shiny::updateSelectInput(session, "selectPHASES_fps",
                                         choices = refs_choices,
-                                        selected = refs_choices[[1]][[1]]))
+                                        selected = NULL))
       }
     })
 
-    #Update the internal standard selectInput so that only phases selected for fitting
-    #are available
-    shiny::observe({
-
-      scu2 <- as.character(input$selectPHASES_fps)
-      scu2 <- filedata3()[[3]][which(filedata3()[[3]][[1]] %in% sub(".*: ", "", scu2) |
-                                       filedata3()[[3]][[2]] %in% sub(".*: ", "", scu2)), 1:2]
-      scu2 <- paste0(scu2[[2]], ": ", scu2[[1]])
-
-      return(shiny::updateSelectInput(session, "selectINT_fps",
-                                      label = NULL,
-                                      choices = scu2,
-                                      selected = head(scu2, 1)))
-    })
 
     shiny::observe({
+      if (class(filedata3()) == "powdRlib") {
 
-      scu <- as.character(input$selectPHASES_fps)
-      scu <- filedata3()[[3]][which(filedata3()[[3]][[1]] %in% sub(".*: ", "", scu) |
-                                      filedata3()[[3]][[2]] %in% sub(".*: ", "", scu)), 1:2]
-      scu <- paste0(scu[[2]], ": ", scu[[1]])
+        int_choices <- paste0(filedata3()[[3]][[2]], ": ", filedata3()[[3]][[1]])
 
-      return(shiny::updateSelectInput(session, "selectINT_fps",
-                                      label = NULL,
-                                      choices = scu,
-                                      selected = head(scu, 1)))
 
+        return(shiny::updateSelectInput(session, "selectINT_fps",
+                                        choices = int_choices,
+                                        selected = int_choices[1]))
+      }
     })
 
 
     shiny::observe({
 
-      scu3 <- as.character(input$selectPHASES_fps)
-      scu3 <- filedata3()[[3]][which(filedata3()[[3]][[1]] %in% sub(".*: ", "", scu3) |
-                                       filedata3()[[3]][[2]] %in% sub(".*: ", "", scu3)), 1:2]
-      scu3 <- paste0(scu3[[2]], ": ", scu3[[1]])
+      amorph_choices <- paste0(filedata3()[[3]][[2]], ": ", filedata3()[[3]][[1]])
 
       if (input$selectMode_fps == "Automated") {
         return(shiny::updateSelectInput(session, "selectAMORPH",
                                         label = NULL,
-                                        choices = scu3,
+                                        choices = amorph_choices,
                                         selected = NULL))
       }
     })
@@ -495,89 +471,106 @@ shiny::shinyServer(function(input, output, session) {
 
 
         if (input$selectMode_fps == "Manual") {
-          fps_out <- powdR::fps(lib = filedata3(),
-                                smpl = filedata2(),
-                                std = sub(".*: ", "", input$selectINT_fps),
-                                std_conc = std_conc_fps,
-                                refs = sub(".*: ", "", input$selectPHASES_fps),
-                                align = input$align_fps,
-                                tth_fps = input$tth_fps_slide,
-                                manual_align = input$align_man_fps,
-                                shift = input$shift_fps,
-                                obj = input$selectOBJ_fps,
-                                solver = input$selectSolver_fps,
-                                remove_trace = input$lod_slide)
+          fps_out <- lapply(filedata2(),
+                            powdR::fps,
+                            lib = filedata3(),
+                            std = sub(".*: ", "", input$selectINT_fps),
+                            std_conc = std_conc_fps,
+                            refs = c(sub(".*: ", "", input$selectPHASES_fps),
+                                     sub(".*: ", "", input$selectINT_fps)),
+                            align = input$align_fps,
+                            tth_fps = input$tth_fps_slide,
+                            manual_align = input$align_man_fps,
+                            shift = input$shift_fps,
+                            obj = input$selectOBJ_fps,
+                            solver = input$selectSolver_fps,
+                            remove_trace = input$lod_slide)
           return(fps_out)
         }
         if (input$selectMode_fps == "Automated") {
-          afps_out <- powdR::afps(lib = filedata3(),
-                                  smpl = filedata2(),
-                                  std = sub(".*: ", "", input$selectINT_fps),
-                                  std_conc = std_conc_fps,
-                                  refs = sub(".*: ", "", input$selectPHASES_fps),
-                                  force = sub(".*: ", "", input$selectFORCE),
-                                  align = input$align_fps,
-                                  tth_fps = input$tth_fps_slide,
-                                  manual_align = input$align_man_fps,
-                                  shift = input$shift_fps,
-                                  obj = input$selectOBJ_fps,
-                                  solver = input$selectSolver_fps,
-                                  lod = input$lod_slide,
-                                  amorphous = sub(".*: ", "", input$selectAMORPH))
+          afps_out <- lapply(filedata2(),
+                             powdR::afps,
+                             lib = filedata3(),
+                             std = sub(".*: ", "", input$selectINT_fps),
+                             std_conc = std_conc_fps,
+                             refs = c(sub(".*: ", "", input$selectPHASES_fps),
+                                      sub(".*: ", "", input$selectINT_fps),
+                                      sub(".*: ", "", input$selectAMORPH)),
+                             force = sub(".*: ", "", input$selectFORCE),
+                             align = input$align_fps,
+                             tth_fps = input$tth_fps_slide,
+                             manual_align = input$align_man_fps,
+                             shift = input$shift_fps,
+                             obj = input$selectOBJ_fps,
+                             solver = input$selectSolver_fps,
+                             lod = input$lod_slide,
+                             amorphous = sub(".*: ", "", input$selectAMORPH))
           return(afps_out)
         }
       })
 
-      fps_out <- fps_reactive()
+      observe({
 
-      output$contents_fps <- DT::renderDataTable({
-        fps_table <- data.frame(fps_out$phases)
-        fps_table$phase_percent <- round(fps_table$phase_percent, 2)
-        return(fps_table)
-      }, options = list(lengthMenu = c(5, 10, 15), pageLength = 10))
+        #fps_out <- fps_reactive()
 
-      output$line_fps <- plotly::renderPlotly({
-        return(plot(fps_out, wavelength = input$selectWAVELENGTHfps, interactive = TRUE))
+        output$contents_fps <- DT::renderDataTable({
+
+          fps_table <- data.frame(fps_reactive()[[1]]$phases)
+          fps_table$phase_percent <- round(fps_table$phase_percent, 2)
+          return(fps_table)
+        }, options = list(lengthMenu = c(5, 10, 15), pageLength = 10))
+
+        output$line_fps <- plotly::renderPlotly({
+
+          return(plot(fps_reactive()[[1]], wavelength = input$selectWAVELENGTHfps, interactive = TRUE))
+
+        })
+
+        output$download_meas <- shiny::downloadHandler(
+          filename = function() {
+            paste("measured_", Sys.Date(), ".xy", sep="")
+          },
+          content = function(file) {
+            write.table(data.frame("X" = fps_reactive()[[1]]$tth,
+                                   "Y" = fps_reactive()[[1]]$measured), file,
+                        sep = " ", col.names = FALSE, row.names = FALSE)
+          }
+        )
+
+        output$download_calc <- shiny::downloadHandler(
+          filename = function() {
+            paste("fitted_", Sys.Date(), ".xy", sep="")
+          },
+          content = function(file) {
+            write.table(data.frame("X" = fps_reactive()[[1]]$tth,
+                                   "Y" = fps_reactive()[[1]]$fitted), file,
+                        sep = " ", col.names = FALSE, row.names = FALSE)
+          }
+        )
+
+
+        output$download_concs <- shiny::downloadHandler(
+          filename = function() {
+            paste("concs_", Sys.Date(), ".csv", sep="")
+          },
+          content = function(file) {
+            write.table(fps_reactive()[[1]]$phases, file, sep = ",", col.names = TRUE, row.names = FALSE)
+          }
+        )
+
+        #Download the whole fps output as .Rdata format
+        output$download_fps <- shiny::downloadHandler(
+          filename = "fps_output.Rdata",
+          content = function(con) {
+            assign("fps_output", fps_reactive()[[1]])
+            save(list="fps_output", file=con)
+          }
+        )
+
+
       })
 
-      #Export the mineral concentrations to a .csv file
-      minout <- fps_out
-      minout <- data.frame(minout$phases)
-      output$download_mins <- shiny::downloadHandler(
-        filename = function() {
-          paste("minerals-", Sys.Date(), ".csv", sep="")
-        },
-        content = function(file) {
-          write.table(minout, file, sep = ",", col.names = TRUE, row.names = FALSE)
-        }
-      )
-
-      #Export the weighted patterns
-      fitout <- fps_out
-      fitout <- data.frame("TTH" = fitout[[1]],
-                           "MEASURED" = fitout[[3]],
-                           "FITTED" = fitout[[2]],
-                           fitout[[8]])
-
-      output$download_fit <- shiny::downloadHandler(
-        filename = function() {
-          paste("fit-", Sys.Date(), ".csv", sep="")
-        },
-        content = function(file) {
-          write.table(fitout, file, sep = ",", col.names = TRUE, row.names = FALSE)
-        }
-      )
-
-      #Download the whole fps output as .Rdata format
-      output$download_fps <- shiny::downloadHandler(
-        filename = "fps_output.Rdata",
-        content = function(con) {
-          assign("fps_output", fps_reactive())
-          save(list="fps_output", file=con)
-        }
-      )
     })
-
 
     #######################
     #TAB 5: Results editor
@@ -653,7 +646,7 @@ shiny::shinyServer(function(input, output, session) {
 
     #Load the results
     results_editor_load_lib <- shiny::reactive({
-      infile_results_editor2 <- input$loadLib_editor
+      infile_results_editor2 <- input$loadLIB_fps_editor
       if (is.null(infile_results_editor2)) {
         #User has not uploaded a file yet
         return(NULL)
@@ -676,53 +669,24 @@ shiny::shinyServer(function(input, output, session) {
                                  label = NULL,
                                  choices = paste0(phase_options[[2]], ": ", phase_options[[1]]),
                                  selected = NULL)
-        }
+      }
 
-      selectSTDupdate <- shiny::reactive({
-        if(class(results_editor_load_lib()) == "powdRlib" &
-           class(results_editor_load()) %in% c("powdRfps", "powdRafps")) {
-          return(input$selectADD_editor)
-          } else {
-            return(c(""))
-            }
-        })
+    })
 
-      removeSTDupdate <- shiny::reactive({
-        if(class(results_editor_load_lib()) == "powdRlib" &
-           class(results_editor_load()) %in% c("powdRfps", "powdRafps")) {
-          return(input$selectREMOVE_editor)
-          } else {
-            return(c(""))
-            }
-        })
 
+#Update the standard selector based on the phases in the library
       shiny::observe({
+        if (class(results_editor_load_lib()) == "powdRlib") {
 
-        #Update the internal standard
-        if(class(results_editor_load_lib()) == "powdRlib" &
-           class(results_editor_load()) %in% c("powdRfps", "powdRafps")) {
+          int_choices_editor <- paste0(results_editor_load_lib()[[3]][[2]], ": ", results_editor_load_lib()[[3]][[1]])
 
-          added_phases <- as.character(selectSTDupdate())
-          removed_phases <- as.character(removeSTDupdate())
 
-          #The selection needs to include all of the phases in the library that are not already in the results
-          std_options <- c(paste0(results_editor_load()[[5]][[2]], ": ",
-                                  results_editor_load()[[5]][[1]]),
-                           added_phases)
-
-          if(length(removed_phases) > 0) {
-            std_options <- std_options[-which(std_options %in% removed_phases)]
-            }
-
-          std_options <- std_options[order(std_options)]
-
-          shiny::updateSelectInput(session, "selectSTD_editor",
-                                   label = NULL,
-                                   choices = std_options,
-                                   selected = NULL)
-          }
-        })
+          return(shiny::updateSelectInput(session, "selectSTD_editor",
+                                          choices = int_choices_editor,
+                                          selected = int_choices_editor[1]))
+        }
       })
+
 
     #Add the uioutput if standard concentration is known
     output$std_conc_box_editor_ui <- shiny::renderUI({
@@ -776,7 +740,8 @@ shiny::shinyServer(function(input, output, session) {
                               harmonise = TRUE,
                               std = gsub(".*: ", "", input$selectSTD_editor),
                               std_conc = std_conc_editor,
-                              refs = gsub(".*: ", "", phases2),
+                              refs = c(gsub(".*: ", "", phases2),
+                                       gsub(".*: ", "", input$selectSTD_editor)),
                               align = input$align_editor,
                               tth_fps = input$tth_editor,
                               manual_align = input$align_man_editor,
@@ -802,33 +767,53 @@ shiny::shinyServer(function(input, output, session) {
 
       shiny::observe({
         #Export the mineral concentrations to a .csv file
-        minout_editor <- fps_reactive_editor()
-        minout_editor <- data.frame(minout_editor[["phases"]])
+        #minout_editor <- fps_reactive_editor()
+        #minout_editor <- data.frame(minout_editor[["phases"]])
 
         output$download_mins_editor <- shiny::downloadHandler(
           filename = function() {
-            paste("minerals-", Sys.Date(), ".csv", sep="")
+            paste("minerals_", Sys.Date(), ".csv", sep="")
             },
           content = function(file) {
-            write.table(minout_editor, file, sep = ",", col.names = TRUE, row.names = FALSE)
+            write.table(fps_reactive_editor()$phases, file, sep = ",", col.names = TRUE, row.names = FALSE)
             }
           )
 
         #Export the weighted patterns
-        fitout_editor <- fps_reactive_editor()
-        fitout_editor <- data.frame("TTH" = fitout_editor[["tth"]],
-                                    "MEASURED" = fitout_editor[["measured"]],
-                                    "FITTED" = fitout_editor[["fitted"]],
-                                    fitout_editor[["weighted_pure_patterns"]])
+        #fitout_editor <- fps_reactive_editor()
+        #fitout_editor <- data.frame("TTH" = fitout_editor[["tth"]],
+        #                            "MEASURED" = fitout_editor[["measured"]],
+        #                            "FITTED" = fitout_editor[["fitted"]],
+        #                            fitout_editor[["weighted_pure_patterns"]])
 
-        output$download_fit_editor <- shiny::downloadHandler(
+        output$download_meas_editor <- shiny::downloadHandler(
           filename = function() {
-            paste("fit-", Sys.Date(), ".csv", sep="")
-            },
+            paste("measured_", Sys.Date(), ".xy", sep="")
+          },
           content = function(file) {
-            write.table(fitout_editor, file, sep = ",", col.names = TRUE, row.names = FALSE)
-            }
-          )
+            write.table(data.frame("X" = fps_reactive_editor()$tth,
+                                   "Y" = fps_reactive_editor()$measured), file, sep = " ", col.names = FALSE, row.names = FALSE)
+          }
+        )
+
+        output$download_calc_editor <- shiny::downloadHandler(
+          filename = function() {
+            paste("fitted_", Sys.Date(), ".xy", sep="")
+          },
+          content = function(file) {
+            write.table(data.frame("X" = fps_reactive_editor()$tth,
+                                   "Y" = fps_reactive_editor()$fitted), file, sep = " ", col.names = FALSE, row.names = FALSE)
+          }
+        )
+
+        # output$download_fit_editor <- shiny::downloadHandler(
+        #   filename = function() {
+        #     paste("fit-", Sys.Date(), ".csv", sep="")
+        #     },
+        #   content = function(file) {
+        #     write.table(fitout_editor, file, sep = ",", col.names = TRUE, row.names = FALSE)
+        #     }
+        #   )
 
         #Download the whole fps output as .Rdata format
         output$download_editor <- shiny::downloadHandler(
@@ -846,7 +831,7 @@ shiny::shinyServer(function(input, output, session) {
     ############################
 
       output$video <- shiny::renderUI({
-        shiny::HTML(paste0('<iframe width="560" height="315" src="https://www.youtube.com/embed/', input$selectVIDEO,
+        shiny::HTML(paste0('<iframe width="840" height="472.5" src="https://www.youtube.com/embed/', "dDd6cr8kpTc",
                            '" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>'))
         })
 

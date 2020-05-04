@@ -258,31 +258,42 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, force, s
                          tth_align, align, manual_align, shift,
                          tth_fps, lod, amorphous, amorphous_lod, ...) {
 
+#Make sure there aren't any negative counts
+  if (min(smpl[[2]]) < 0) {
 
+    stop("Please make sure that there are no negative count intensities in the sample data")
+
+  }
+
+#Define force if missing
   if (missing(force)) {
 
     force <- c()
 
   }
 
+#Extract phase ID's from force
   if (length(force) > 0) {
 
     force <- lib$phases$phase_id[which(lib$phases$phase_id %in% force | lib$phases$phase_name %in% force)]
 
   }
 
+#Set harmonise to true if missing
   if (missing(harmonise)) {
 
     harmonise <- TRUE
 
   }
 
+#Make sure harmonise is logical is defined
   if (!is.logical(harmonise)) {
 
     stop("The harmonise argument must be logical")
 
   }
 
+#Make sure harmonise is used if the sample and library are not identical
   if (harmonise == FALSE & !identical(lib$tth, smpl[[1]])) {
 
     stop("The 2theta scale of the library and sample do not match. Try
@@ -290,24 +301,27 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, force, s
 
   }
 
-  #If amorphous is misssing then set it to an empty vector
+#If amorphous is misssing then set it to an empty vector
   if(missing(amorphous)) {
 
     amorphous = c()
   }
 
+#Set std_conc to NA if missing
   if (missing(std_conc)) {
 
     std_conc <- NA
 
   }
 
+#If std_conc is either NA or numeric then stop
   if (!(is.numeric(std_conc) | is.na(std_conc))) {
 
     stop("\n-The std_conc argument must either be NA or a numeric value greater than 0 and less than 100.")
 
   }
 
+#Make sure the std is defined if std_conc is numeric
   if (is.numeric(std_conc)) {
 
     if (missing(std)) {
@@ -316,6 +330,7 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, force, s
 
     }
 
+#Make sure the std_conc is between 0 and 100
     if(std_conc <= 0 | std_conc >= 100) {
 
       stop("\n-The std_conc argument must either be NA or a numeric value greater than 0 and less than 100.")
@@ -324,52 +339,53 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, force, s
 
   }
 
-  #If tth_align is missing then use the maximum tth range of the sample
+#If tth_align is missing then use the maximum tth range of the sample
   if(missing(tth_align)) {
 
     tth_align = c(min(smpl[[1]]), max(smpl[[1]]))
   }
 
-  #If align is missing then set it to default
+#If align is missing then set it to default
   if(missing(align)) {
 
     align = 0.1
   }
 
+#If manual_align is not defined then set it to FALSE
   if(missing(manual_align)) {
 
     manual_align <- FALSE
 
   }
 
+#Ensure manual_align is logical
   if(!is.logical(manual_align)) {
 
     stop("The manual_align argument must be logical")
 
   }
 
-  #If solver is missing then set it to BFGS
+#If solver is missing then set it to BFGS
   if(missing(solver)) {
 
     solver = "BFGS"
   }
 
-  #If a solver other than NNLS is being used but the objective function
-  #not defined, then used Rwp
+#If obj is not defined then set to Rwp
   if(missing(obj)) {
 
     obj = "Rwp"
 
   }
 
-  #If shift is missing then set it to default
+#If shift is missing then set it to default
   if(missing(shift)) {
 
     shift = 0
 
   }
 
-  #If refs are not defined or "all" then use all of them
+#If refs are not defined then use all of them
   if(missing(refs)) {
 
     cat("\n-Using all reference patterns in the library")
@@ -377,30 +393,31 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, force, s
 
   }
 
-  #If lod is missing then set it to a default of 1
+#If lod is missing then set it to a default of 0.1
   if(missing(lod)) {
-
+    cat("\n-lod argument not defined. Setting to 0.1")
     lod = 0.1
   }
 
-  #If amorphous_lod is missing, set it to 0
+#If amorphous_lod is missing, set it to 0
   if(missing(amorphous_lod)) {
 
     amorphous_lod = 0
+
   }
 
 
-  #Ensure that the lod is greater than 0.
+#Ensure that the lod is greater than 0.
   if (lod < 0) {
     stop("The lod argument must be equal to or greater than 0")
   }
 
-  #Create a warning message if the shift is greater than 0.5, since this can confuse the optimisation
+#Create a warning message if the shift is greater than 0.5, since this can confuse the optimisation
   if (align > 0.5 & manual_align == FALSE) {
     warning("Be cautious of large 2theta shifts. These can cause issues in sample alignment.")
   }
 
-  #Make only "Nelder-Mead", "BFGS", "CG" or "L-BFGS-B" optional for the solver
+#Make only "Nelder-Mead", "BFGS", "CG" or "L-BFGS-B" optional for the solver
   if (!solver %in% c("Nelder-Mead", "BFGS", "CG", "L-BFGS-B")) {
     stop("The solver argument must be one of 'BFGS', 'Nelder Mead' or 'CG'")
   }
@@ -410,8 +427,11 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, force, s
     cat("\n-The 'L-BFGS-B' option for solver has deprecated.
         Using 'BFGS' instead.")
 
+    solver <- "BFGS"
+
   }
 
+#No need for a standard if these conditions are met
   if (is.na(std_conc)) {
 
   #If align is 0 and lod isn't being used then the standard can be set to 'none'
@@ -429,10 +449,8 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, force, s
 
   }
 
-  #subset lib according to the refs vector
-
-  lib$xrd <- lib$xrd[which(lib$phases$phase_id %in% c(refs, force) | lib$phases$phase_name %in% refs)]
-  lib$phases <- lib$phases[which(lib$phases$phase_id %in% c(refs, force) | lib$phases$phase_name %in% refs), ]
+  #subset lib according to the refs and force vector vectors
+  lib <- subset(lib, refs = c(refs, force), mode = "keep")
 
 
   #Make sure that the phase identified as the internal standard is contained within the reference library
@@ -461,6 +479,10 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, force, s
 
   }
 
+#--------------------------------------------------------------------
+#Alignment
+#--------------------------------------------------------------------
+
   #align the data
   if (!align == 0) {
   cat("\n-Aligning sample to the internal standard")
@@ -479,6 +501,7 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, force, s
 
   #smpl becomes a data frame by extracting only the aligned data
   smpl <- smpl[[2]]
+
   #Extract the aligned sample
   smpl <- smpl[which(smpl[[1]] >= min(lib$tth) & smpl[[1]] <= max(lib$tth)), ]
 
@@ -499,8 +522,6 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, force, s
 
   if (align > 0) {
 
-  #xrd_ref_names <- lib$phases$phase_id
-
   #Ensure that samples in the reference library are on the same scale as the sample
   cat("\n-Interpolating library to same 2theta scale as aligned sample")
   lib$xrd <- data.frame(lapply(lib$xrd,
@@ -509,12 +530,14 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, force, s
                                                          method = "natural",
                                                          xout = smpl_tth)[[2]]))
 
-  #names(lib$xrd) <- xrd_ref_names
-
   #Replace the library tth with that of the sample
   lib$tth <- smpl_tth
 
   }
+
+  #----------------------------------------------------------------
+  #Cropping data to 2theta range defined in tth_fps
+  #----------------------------------------------------------------
 
   #### decrease 2TH scale to the range defined in the function call
   smpl <- smpl[which(smpl$tth >= tth_fps[1] & smpl$tth <= tth_fps[2]), ]
@@ -537,6 +560,16 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, force, s
   #Initial NNLS to remove some samples
   #--------------------------------------------
 
+  #The optimisation can fail if negative have creeped in during interpolation
+  if(length(which(smpl[[2]] < 0) > 0)) {
+
+    delete_negs <- which(smpl[[2]] < 0)
+    smpl <- smpl[-delete_negs,]
+    lib$tth <- lib$tth[-delete_negs]
+    lib$xrd <- lib$xrd[-delete_negs, ]
+
+  }
+
   cat("\n-Applying non-negative least squares")
   nnls_out <- .xrd_nnls(xrd.lib = lib, xrd.sample = smpl[, 2], force = force)
 
@@ -550,41 +583,6 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, force, s
     x <- rep(0, ncol(lib$xrd))
     names(x) <- names(lib$xrd)
 
-      #Optimise weighting and shifts if these conditions are met
-      #if (shift_mode == "optimise" & shift > 0 & length(x) > 1) {
-
-        #Create x_s parameters
-       # x_s <- x
-        #names(x_s) <- paste0(names(x), "_s")
-
-        #cat("\n-Optimising weighting and shifting coefficients...")
-        #o <- stats::optim(par = c(x,x_s), .fullpat_shift_optim,
-        #                  method = solver, lib = lib,
-        #                  smpl = smpl, obj = obj)
-
-        #x <- o$par
-
-        #Extract the shifted data
-        #cat("\n-Harmonising library and sample to same 2theta axis")
-        #shifted <- .fullpat_shift(smpl = smpl, lib = lib,
-        #                          par_shift = x[((length(x)/2)+1):length(x)],
-        #                          limit = shift)
-
-        #lib <- shifted$lib
-        #smpl <- shifted$smpl
-
-        #Now extract just the weighting coefficients
-        #x <- x[1:ncol(lib$xrd)]
-
-        #Now make sure negative coefficients are (almost) zero again
-        #if (length(which(x < 0)) > 0) {
-
-        #  x[which(x < 0)] <- 1*10^-16
-
-        #}
-
-      #} else {
-
         cat("\n-Optimising...")
 
         o <- stats::optim(par = x, .fullpat,
@@ -592,8 +590,6 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, force, s
                           sample_pattern = smpl[, 2], obj = obj)
 
         x <- o$par
-
-      #}
 
 
 #-------------------------------------------------------
@@ -618,17 +614,6 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, force, s
   #is included
 
   if(shift > 0 & length(x) > 1) {
-
-    #fpf_aligned <- .shift(smpl = smpl,
-    #                      lib = lib,
-    #                      max_shift = shift,
-    #                      x = x,
-    #                      res = shift_res,
-    #                      obj = obj)
-
-    #smpl <- fpf_aligned[["smpl"]]
-    #lib$xrd <- data.frame(fpf_aligned[["lib"]])
-    #lib$tth <- smpl[,1]
 
     #This will replace the grid search shifting
     cat("\n-Optimising shifting coefficients...")
@@ -657,16 +642,21 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, force, s
     lib <- shifted$lib
     smpl <- shifted$smpl
 
-  #}
-
-
   #----------------------------------------------
   #Re-optimise after shifting
   #----------------------------------------------
 
-  #if(shift > 0 & shift_mode == "grid" & length(x) > 1) {
-
   cat("\n-Reoptimising after shifting data")
+
+    #The optimisation can fail if negative have creeped in during interpolation
+    if(length(which(smpl[[2]] < 0) > 0)) {
+
+      delete_negs <- which(smpl[[2]] < 0)
+      smpl <- smpl[-delete_negs,]
+      lib$tth <- lib$tth[-delete_negs]
+      lib$xrd <- lib$xrd[-delete_negs, ]
+
+    }
 
   o <- stats::optim(par = x, .fullpat,
                     method = solver, pure_patterns = lib$xrd,
@@ -692,10 +682,11 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, force, s
 
   #Now that some negative parameters have been removed, the detection limits
   #of the remaining phases are estimated.
+#---------------------------------------------------------------
+#Removing phases based on detection limits
+#---------------------------------------------------------------
 
-  # Removing phases based on detection limits
-
-  #Calculate the lod and remove any phases below it if lod > 0
+#Calculate the lod and remove any phases below it if lod > 0
 
   if (lod > 0) {
 
@@ -719,7 +710,7 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, force, s
   }
 
   #Reoptimise if things have changed
-  logical_reoptimise <- identical(x[order(names(x))], xrd_detectable[["x"]])
+  logical_reoptimise <- identical(x, xrd_detectable[["x"]])
 
   x <- xrd_detectable[["x"]]
   lib$xrd <- xrd_detectable[["lib"]]
@@ -737,6 +728,10 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, force, s
   }
 
   }
+
+#-------------------------------------------------------------------------
+#Recalculating concentrations
+#-------------------------------------------------------------------------
 
   #Calculate mineral concentrations so that I can throw away any amorphous
   #phases below detection limit
@@ -796,10 +791,19 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, force, s
   lib <- remove_neg_out[[2]]
   }
 
+
+#-----------------------------------------------------------------------
+#Computing fitted pattern and residuals
+#-----------------------------------------------------------------------
+
   #compute fitted pattern and residuals
   fitted_pattern <- apply(sweep(as.matrix(lib$xrd), 2, x, "*"), 1, sum)
 
   resid_x <- smpl[, 2] - fitted_pattern
+
+#-----------------------------------------------------------------------
+#Computing final phase concentrations
+#-----------------------------------------------------------------------
 
   #compute phase concentrations
   cat("\n-Computing phase concentrations")
@@ -846,8 +850,6 @@ afps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, force, s
     names(xrd) <- df$phase_id[1]
   }
 
-
-  #Define a list of the inputs
 
   #Create a list of the input arguments
   inputs <- list("harmonise" = harmonise,

@@ -1,3 +1,20 @@
+# powdR 1.2.1
+
+## New features
+* `plot()` methods for `powdRfps` and `powdRafps` objects now include `mode`
+  and `xlim` arguments, allowing for different plot types and x-axis adjustment.
+
+## Bug fixes
+* Dependency on packages `DT` and `shinyWidgets` now defined in namespace.
+* Bug stopping the shiny app working in shiny versions >1.3.2 now fixed.
+* Couple of other small edits to phase selection in the shiny app that should
+  keep things simple.
+* `powdRlib()` no longer orders the reference patterns alphabetically, and instead
+  retains the original order that they are supplied in.
+* Negative values from natural spline interpolation now removed from data as these
+  can prevent the optimisation routines from working.
+* Phases are no longer ordered alphabetically in outputs from `fps()` and `afps()`.
+
 # powdR 1.2.0
 
 ## New features

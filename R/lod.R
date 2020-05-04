@@ -41,21 +41,14 @@
   #quantify minerals
   quant <- .qminerals(x = x, xrd_lib = lib)
 
-  #order the data
-  quant$df <- quant$df[order(quant$df$phase_id),]
 
-  x <- x[order(names(x))]
+  #Check the order
+  if(!all(sapply(list(quant$df$phase_id,
+                     names(lib$xrd)), FUN = identical, names(x)))) {
 
-  #Same for lib$xrd and lib$phases
-  lib$xrd <- lib$xrd[order(names(lib$xrd))]
-  lib$phases <- lib$phases[order(lib$phases$phase_id),]
+    stop("The orders of the coefficients and library no longer match.")
 
-  #Add the amorphous phases as a column in the quant$df table
- # quant$df$amorphous <- FALSE
-
-  #if(length(which(amorphous %in% quant$df$phase_id)) > 0) {
-   # quant$df$amorphous[which(quant$df$phase_id %in% amorphous)] <- TRUE
-  #}
+  }
 
   #Compute the weighted RIR's
   dfs_weighted <- .weighted_rirs(quant$df)
@@ -127,8 +120,6 @@
   quant <- .qminerals2(x = x, xrd_lib = lib,
                        std = std, std_conc = std_conc)
 
-  #order the data
-  quant$df <- quant$df[order(quant$df$phase_id),]
 
   #Identify any ID's of phases with the same name as std
   std_name <- lib$phases$phase_name[which(lib$phases$phase_id == std)]
@@ -138,6 +129,7 @@
 
   id_match <- which(names(x) %in% std_ids)
 
+  #Check the order
   if (length(id_match) < 1) {
 
     stop("\n-The phases specified as the std is not present. Cannot compute
@@ -145,11 +137,12 @@
 
   }
 
-  x <- x[order(names(x))]
+  if(!all(sapply(list(quant$df$phase_id,
+                      names(lib$xrd)), FUN = identical, names(x)))) {
 
-  #Same for lib$xrd and lib$phases
-  lib$xrd <- lib$xrd[order(names(lib$xrd))]
-  lib$phases <- lib$phases[order(lib$phases$phase_id),]
+    stop("The orders of the coefficients and library no longer match.")
+
+  }
 
   #Compute the weighted RIR's
   dfs_weighted <- .weighted_rirs(quant$df)

@@ -145,6 +145,12 @@ fit_5$phases_grouped
 plot(fit_5, wavelength = "Cu")
 
 ## ---- message = FALSE, warning = FALSE----------------------------------------
+plot(fit_5, wavelength = "Cu", mode = "residuals")
+
+## ---- message = FALSE, warning = FALSE----------------------------------------
+plot(fit_5, wavelength = "Cu", mode = "both", xlim = c(20,30))
+
+## ---- message = FALSE, warning = FALSE----------------------------------------
 multi_fit <- lapply(rockjock_mixtures[1:3], fps,
                     lib = rockjock,
                     std = "CORUNDUM",
