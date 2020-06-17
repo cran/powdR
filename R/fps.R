@@ -213,6 +213,9 @@ fps <- function(lib, ...) {
 #' the reference library will be used.
 #' @param std The phase ID (e.g. "QUA.1") to be used as internal
 #' standard. Must match an ID provided in the \code{refs} parameter.
+#' @param force An optional string of phase ID's or names specifying which phases should be forced to
+#' remain throughout the automated full pattern summation. The ID's or names supplied must be present
+#' within the \code{lib$phases$phase_id} or \code{lib$phases$phase_name} columns.
 #' @param std_conc The concentration of the internal standard (if known) in weight percent. If
 #' unknown then use \code{std_conc = NA} (default), in which case it will be assumed that all phases sum
 #' to 100 percent.
@@ -328,7 +331,7 @@ fps <- function(lib, ...) {
 #' Eberl, D.D., 2003. User's guide to RockJock - A program for determining quantitative mineralogy from
 #' powder X-ray diffraction data. Boulder, CA.
 #' @export
-fps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, std_conc,
+fps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, force, std_conc,
                 tth_align, align, manual_align, tth_fps, shift,
                 remove_trace, ...) {
 
@@ -339,7 +342,32 @@ fps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, std_conc,
 #Make sure there aren't any negative counts
   if (min(smpl[[2]]) < 0) {
 
-    stop("Please make sure that there are no negative count intensities in the sample data")
+    stop("Please make sure that there are no negative count intensities in the sample data",
+         call. = FALSE)
+
+  }
+
+#Define force if missing
+  if (missing(force)) {
+
+    force <- c()
+
+  }
+
+#Extract phase ID's from force
+  if (length(force) > 0) {
+
+    wrong_force <- which(!force %in% lib$phases$phase_id & !force %in% lib$phases$phase_name)
+
+    if (length(wrong_force) > 0) {
+
+      stop(paste(c("\nThe following reference patterns specified in the force argument are not in the library:\n",
+                   paste(c(force[wrong_force]), collapse = ", "))),
+           call. = FALSE)
+
+    }
+
+    force <- lib$phases$phase_id[which(lib$phases$phase_id %in% force | lib$phases$phase_name %in% force)]
 
   }
 
@@ -353,7 +381,8 @@ fps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, std_conc,
 #Make sure harmonise is logical
   if (!is.logical(harmonise)) {
 
-    stop("The harmonise argument must be logical.")
+    stop("The harmonise argument must be logical.",
+         call. = FALSE)
 
   }
 
@@ -361,7 +390,8 @@ fps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, std_conc,
   if (harmonise == FALSE & !identical(lib$tth, smpl[[1]])) {
 
     stop("The 2theta scale of the library and sample do not match. Try
-         setting the harmonise argument to TRUE.")
+         setting the harmonise argument to TRUE.",
+         call. = FALSE)
 
   }
 
@@ -375,7 +405,8 @@ fps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, std_conc,
 #Make sure that the std_conc is numeric if needed
   if (!(is.numeric(std_conc) | is.na(std_conc))) {
 
-    stop("\n-The std_conc argument must either be NA or a numeric value greater than 0 and less than 100.")
+    stop("\n-The std_conc argument must either be NA or a numeric value greater than 0 and less than 100.",
+         call. = FALSE)
 
   }
 
@@ -384,13 +415,15 @@ fps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, std_conc,
 
     if (missing(std)) {
 
-      stop("\n-Please define the std argument")
+      stop("\n-Please define the std argument",
+           call. = FALSE)
 
     }
 
     if(std_conc <= 0 | std_conc >= 100) {
 
-      stop("\n-The std_conc argument must either be NA or a numeric value greater than 0 and less than 100.")
+      stop("\n-The std_conc argument must either be NA or a numeric value greater than 0 and less than 100.",
+           call. = FALSE)
 
     }
 
@@ -419,7 +452,8 @@ fps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, std_conc,
 #Make sure manual_align is logical
   if(!is.logical(manual_align)) {
 
-    stop("The manual_align argument must be logical")
+    stop("The manual_align argument must be logical",
+         call. = FALSE)
 
   }
 
@@ -472,17 +506,20 @@ fps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, std_conc,
 
   #Create a warning message if the shift is greater than 0.5, since this can confuse the optimisation
   if (abs(align) > 0.5 & manual_align == FALSE) {
-    warning("Be cautious of large 2theta shifts. These can cause issues in sample alignment.")
+    warning("Be cautious of large 2theta shifts. These can cause issues in sample alignment.",
+            call. = FALSE)
   }
 
   #Ensure that remove_trace is not less than zero
   if (remove_trace < 0) {
-    stop("The remove_trace argument must be greater than 0.")
+    stop("The remove_trace argument must be greater than 0.",
+         call. = FALSE)
   }
 
   #Make only "Nelder-Mead", "BFGS", or "CG", "L-BFGS-B" or "NNLS" optional for the solver
   if (!solver %in% c("Nelder-Mead", "BFGS", "CG", "L-BFGS-B", "NNLS")) {
-    stop("The solver argument must be one of 'BFGS', 'Nelder Mead', 'CG', or 'NNLS'")
+    stop("The solver argument must be one of 'BFGS', 'Nelder Mead', 'CG', or 'NNLS'",
+         call. = FALSE)
   }
 
   #Use "BFGS" instead of "L-BFGS-B" if defined
@@ -499,7 +536,8 @@ fps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, std_conc,
   if (solver == "NNLS" & shift > 0) {
 
     warning("When shift > 0, the solver argument must be one of 'BFGS',
-    'Nelder-Mead' or 'CG'. No shifting will be used.")
+    'Nelder-Mead' or 'CG'. No shifting will be used.",
+            call. = FALSE)
 
   }
 
@@ -516,16 +554,28 @@ fps.powdRlib <- function(lib, smpl, harmonise, solver, obj, refs, std, std_conc,
 
   }
 
+  #Check that none of the refs are spelt wrong
+  wrong_spellings <- which(!refs %in% lib$phases$phase_id & !refs %in% lib$phases$phase_name)
+
+  if (length(wrong_spellings) > 0) {
+
+    stop(paste(c("\nThe following reference patterns specified in the refs argument are not in the library:\n",
+                    paste(c(refs[wrong_spellings]), collapse = ", "))),
+            call. = FALSE)
+
+  }
+
 #-------------------------------------------------------------
 #END OF CONDITIONS, NOW SUBSET LIBRARY
 #-------------------------------------------------------------
 
-  #subset lib according to the refs vector
-  lib <- subset(lib, refs = refs, mode = "keep")
+  #subset lib according to the refs and force vector
+  lib <- subset(lib, refs = c(refs, force), mode = "keep")
 
   #Make sure that the phase identified as the internal standard is contained within the reference library
   if (!std == "none" & !std %in% lib$phases$phase_id) {
-    stop("The phase you have specified as the internal standard is not in the subset reference library")
+    stop("The phase you have specified as the internal standard is not in the subset reference library",
+         call. = FALSE)
   }
 
 #Harmonise libraries
@@ -556,7 +606,8 @@ smpl <- .xrd_align(smpl = smpl,
 #If the alignment is close to the limit, provide a warning
 if (sqrt(smpl[[1]]^2) > (align*0.95) & manual_align == FALSE) {
   warning("The optimised shift used in alignment is equal to the maximum shift defined
-          in the function call. We advise visual inspection of this alignment.")
+          in the function call. We advise visual inspection of this alignment.",
+          call. = FALSE)
 }
 
 #smpl becomes a data frame
@@ -641,7 +692,7 @@ x <- o$par
 if (min(x) < 0) {
 
 remove_neg_out <- .remove_neg(x = x, lib = lib, smpl = smpl,
-                              solver = solver, obj = obj)
+                              solver = solver, obj = obj, force = force)
 
 x <- remove_neg_out[[1]]
 lib <- remove_neg_out[[2]]
@@ -651,7 +702,7 @@ lib <- remove_neg_out[[2]]
 } else {
 
   cat("\n-Applying non-negative least squares")
-  nnls_out <- .xrd_nnls(xrd.lib = lib, xrd.sample = smpl[, 2])
+  nnls_out <- .xrd_nnls(xrd.lib = lib, xrd.sample = smpl[, 2], force = force)
 
   lib$xrd <- nnls_out$xrd.lib
   x <- nnls_out$x
@@ -725,7 +776,7 @@ if(shift > 0 & length(x) > 1 & solver %in% c("Nelder-Mead", "BFGS", "CG")) {
 if (min(x) < 0) {
 
 remove_neg_out <- .remove_neg(x = x, lib = lib, smpl = smpl,
-                              solver = solver, obj = obj)
+                              solver = solver, obj = obj, force = force)
 
 x <- remove_neg_out[[1]]
 lib <- remove_neg_out[[2]]
@@ -808,6 +859,7 @@ inputs <- list("harmonise" = harmonise,
                "obj" = obj,
                "refs" = refs,
                "std" = std,
+               "force" = force,
                "std_conc" = std_conc,
                "tth_align" = tth_align,
                "align" = align,

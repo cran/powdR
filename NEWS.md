@@ -1,3 +1,17 @@
+# powdR 1.2.2
+
+## New features
+* `fps()` now accepts the `force` argument, forcing phases to remain in the final output even if their
+  coefficients are negative.
+* `fps()` and `afps()` will now stop if any of the phases specified in the `refs` argument are not
+  in the library.
+* Warning messages now generally do not include the call.
+* Progress bar now included in the Shiny app when computing `fps()` and `afps()`.
+* `summarise_mineralogy()` now accepts single samples (i.e. a list of 1 `powdRfps` or `powdRafps` object).
+
+## Bug fixes
+* `utils` no longer in imports (hence fixing associated note in CRAN checks).
+
 # powdR 1.2.1
 
 ## New features
