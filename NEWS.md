@@ -1,3 +1,13 @@
+# powdR 1.2.3
+
+## New features
+* New function `regroup()` allows for an alternative mineral grouping structure to be applied to
+  `powdRfps` and `powdRafps` objects.
+* New function `tth_transform()` allows 2theta transformation between different monochromatic X-ray
+  wavelengths.
+* `fps()` and `afps()` now accept a logical `normalise` argument, which allows the internal standard
+  concentration to be omitted and phase concentrations subsequently normalised to sum to 100 %.
+
 # powdR 1.2.2
 
 ## New features
