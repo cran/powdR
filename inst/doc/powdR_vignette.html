@@ -12,10 +12,74 @@
 
 <meta name="author" content="Benjamin Butler" />
 
-<meta name="date" content="2020-10-15" />
+<meta name="date" content="2020-11-16" />
 
 <title>powdR: Full Pattern Summation of X-ray Powder Diffraction Data</title>
 
+<script>// Hide empty <a> tag within highlighted CodeBlock for screen reader accessibility (see https://github.com/jgm/pandoc/issues/6352#issuecomment-626106786) -->
+// v0.0.1
+// Written by JooYoung Seo (jooyoung@psu.edu) and Atsushi Yasumoto on June 1st, 2020.
+
+document.addEventListener('DOMContentLoaded', function() {
+  const codeList = document.getElementsByClassName("sourceCode");
+  for (var i = 0; i < codeList.length; i++) {
+    var linkList = codeList[i].getElementsByTagName('a');
+    for (var j = 0; j < linkList.length; j++) {
+      if (linkList[j].innerHTML === "") {
+        linkList[j].setAttribute('aria-hidden', 'true');
+      }
+    }
+  }
+});
+</script>
+<style type="text/css">
+a.anchor-section {margin-left: 10px; visibility: hidden; color: inherit;}
+a.anchor-section::before {content: '#';}
+.hasAnchor:hover a.anchor-section {visibility: visible;}
+</style>
+<script>// Anchor sections v1.0 written by Atsushi Yasumoto on Oct 3rd, 2020.
+document.addEventListener('DOMContentLoaded', function() {
+  // Do nothing if AnchorJS is used
+  if (typeof window.anchors === 'object' && anchors.hasOwnProperty('hasAnchorJSLink')) {
+    return;
+  }
+
+  const h = document.querySelectorAll('h1, h2, h3, h4, h5, h6');
+
+  // Do nothing if sections are already anchored
+  if (Array.from(h).some(x => x.classList.contains('hasAnchor'))) {
+    return null;
+  }
+
+  // Use section id when pandoc runs with --section-divs
+  const section_id = function(x) {
+    return ((x.classList.contains('section') || (x.tagName === 'SECTION'))
+            ? x.id : '');
+  };
+
+  // Add anchors
+  h.forEach(function(x) {
+    const id = x.id || section_id(x.parentElement);
+    if (id === '') {
+      return null;
+    }
+    let anchor = document.createElement('a');
+    anchor.href = '#' + id;
+    anchor.classList = ['anchor-section'];
+    x.classList.add('hasAnchor');
+    x.appendChild(anchor);
+  });
+});
+</script>
+
+<style type="text/css">
+  code{white-space: pre-wrap;}
+  span.smallcaps{font-variant: small-caps;}
+  span.underline{text-decoration: underline;}
+  div.column{display: inline-block; vertical-align: top; width: 50%;}
+  div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+  ul.task-list{list-style: none;}
+    </style>
 
 
 <style type="text/css">code{white-space: pre;}</style>
@@ -303,7 +367,7 @@ code > span.er { color: #a61717; background-color: #e3d2d2; }
 
 <h1 class="title toc-ignore">powdR: Full Pattern Summation of X-ray Powder Diffraction Data</h1>
 <h4 class="author">Benjamin Butler</h4>
-<h4 class="date">2020-10-15</h4>
+<h4 class="date">2020-11-16</h4>
 
 
 
@@ -348,15 +412,15 @@ p {line-height: 1.5em;}
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1"></a><span class="kw">data</span>(minerals_phases)</span>
 <span id="cb2-2"><a href="#cb2-2"></a></span>
 <span id="cb2-3"><a href="#cb2-3"></a>minerals_phases[<span class="dv">1</span><span class="op">:</span><span class="dv">8</span>,]</span>
-<span id="cb2-4"><a href="#cb2-4"></a><span class="co">#&gt;    phase_id  phase_name  rir</span></span>
-<span id="cb2-5"><a href="#cb2-5"></a><span class="co">#&gt; 12    QUA.1      Quartz 4.62</span></span>
-<span id="cb2-6"><a href="#cb2-6"></a><span class="co">#&gt; 13    QUA.2      Quartz 4.34</span></span>
-<span id="cb2-7"><a href="#cb2-7"></a><span class="co">#&gt; 4       FEL  K-feldspar 0.75</span></span>
-<span id="cb2-8"><a href="#cb2-8"></a><span class="co">#&gt; 11      ORT  K-feldspar 1.03</span></span>
-<span id="cb2-9"><a href="#cb2-9"></a><span class="co">#&gt; 14      SAN  K-feldspar 0.93</span></span>
-<span id="cb2-10"><a href="#cb2-10"></a><span class="co">#&gt; 1       ALB Plagioclase 1.31</span></span>
-<span id="cb2-11"><a href="#cb2-11"></a><span class="co">#&gt; 9       OLI Plagioclase 1.06</span></span>
-<span id="cb2-12"><a href="#cb2-12"></a><span class="co">#&gt; 2     DOL.1    Dolomite 2.35</span></span></code></pre></div>
+<span id="cb2-4"><a href="#cb2-4"></a><span class="co">#&gt;   phase_id  phase_name  rir</span></span>
+<span id="cb2-5"><a href="#cb2-5"></a><span class="co">#&gt; 1    QUA.1      Quartz 4.62</span></span>
+<span id="cb2-6"><a href="#cb2-6"></a><span class="co">#&gt; 2    QUA.2      Quartz 4.34</span></span>
+<span id="cb2-7"><a href="#cb2-7"></a><span class="co">#&gt; 3      FEL  K-feldspar 0.75</span></span>
+<span id="cb2-8"><a href="#cb2-8"></a><span class="co">#&gt; 4      ORT  K-feldspar 1.03</span></span>
+<span id="cb2-9"><a href="#cb2-9"></a><span class="co">#&gt; 5      SAN  K-feldspar 0.93</span></span>
+<span id="cb2-10"><a href="#cb2-10"></a><span class="co">#&gt; 6      ALB Plagioclase 1.31</span></span>
+<span id="cb2-11"><a href="#cb2-11"></a><span class="co">#&gt; 7      OLI Plagioclase 1.06</span></span>
+<span id="cb2-12"><a href="#cb2-12"></a><span class="co">#&gt; 8    DOL.1    Dolomite 2.35</span></span></code></pre></div>
 <p>Crucially when building the <code>powdRlib</code> object, all phase ID’s in the first column of the <code>phases_table</code> must match the column names of the <code>xrd_table</code> (except the name of the first column which is the 2<span class="math inline">\(\theta\)</span> scale), for example.</p>
 <div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1"></a><span class="kw">identical</span>(<span class="kw">names</span>(minerals_xrd[<span class="op">-</span><span class="dv">1</span>]),</span>
 <span id="cb3-2"><a href="#cb3-2"></a>          minerals_phases<span class="op">$</span>phase_id)</span>

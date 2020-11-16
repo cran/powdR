@@ -1,8 +1,8 @@
 Package: powdR
 Type: Package
 Title: Full Pattern Summation of X-Ray Powder Diffraction Data
-Version: 1.2.3
-Date: 2020-10-12
+Version: 1.2.4
+Date: 2020-11-16
 Authors@R: c(
   person("Benjamin", "Butler", email = "benjamin.butler@hutton.ac.uk",
   role = c("aut", "cre")),
@@ -29,10 +29,10 @@ Suggests: knitr, rmarkdown
 RoxygenNote: 7.1.0
 VignetteBuilder: knitr
 NeedsCompilation: no
-Packaged: 2020-10-15 10:29:39 UTC; bb42885
+Packaged: 2020-11-16 17:42:08 UTC; bb42885
 Author: Benjamin Butler [aut, cre],
   Stephen Hillier [aut],
   Dylan Beaudette [ctb],
   Dennis Eberl [ctb]
 Repository: CRAN
-Date/Publication: 2020-10-15 15:10:05 UTC
+Date/Publication: 2020-11-16 18:10:02 UTC
