@@ -1,27 +1,86 @@
+# powdR 1.3.0.999
+
+## New features
+* Vignettes updated to account for all new features detailed below.
+* Twenty one additional reference patterns associated for soils from the
+  Africa Soil Information Service XRPD database now added as `afsis` data.
+  The phase IDs in the data have been modified for clarity, and the originals
+  are found in `afsis_codes` data that is also included with the package.
+* Regrouping data for the `rockjock` and `afsis` reference libraries
+  now provided in `rockjock_regroup` and `afsis_regroup`, respectively.
+* `plot` methods for `powdRfps` and `powdRafps` objects now accept a logical
+  `group` argument. When `TRUE` this results in reference patterns being
+  plotted grouped and summed by phase name.
+* A background fitting shiny app is now included that is loaded via
+  `run_bkg()`
+* `as_xy()` added, which creates `XY` objects from data frames that contain
+  two columns denoting 2theta and counts.
+* `as_multi_xy()` added, which creates a `multiXY` objects from a list of
+  ``XY` data frames or a data frame containing data from multiple samples.
+  `multiXY` objects can easily be plotted using the new `plot.multiXY` 
+  method, whilst `XY` objects can be plotted using the `plot.XY` method.
+* `align_xy()` added with associated S3 methods for aligning XRPD data within
+  `XY` and `multiXY` objects to a chosen standard.
+* `multi_xy_to_df()` added, which converts `multiXY` objects to data frames.
+* `interpolate()` added, which contains methods for interpolating `XY`,
+  `multiXY` and `powdRlib` objects onto a new 2theta scale.
+* `merge()` method added for `powdRlib` objects, which allows two `powdRlib`
+  objects to be merged into a single `powdRlib` object.
+* `extract_xy()` added, which is a wrapper for `read_xyData()` from the
+  `rxylib` package. This function extracts any number of xy data frames from
+  various proprietary formats of X-ray powder diffraction data.
+* `read_xy()` added, which reads any number of ASCII XY files.
+* `fps()` and `afps()` now accept `omit_std` and `closed` arguments which are
+  used to specify how the phase concentrations are adjusted based on the
+  internal standard.
+* The `normalise` argument of `fps()` and `afps()` is now deprecated and
+  replaced with `closed`.
+* The new `omit_std()` methods for `powdRfps` and `powdRafps` objects allows
+  for the internal standard concentration to be omitted from the output and
+  phase concentrations re-computed.
+* The new `close_quant()` methods for `powdRfps` and `powdRafps` objects allows
+  for the quantitative composition to be closed so that it sums to 100 percent.
+* Objective functions Delta, R and Rwp are now implemented in functions `delta()`,
+  `r()` and `rwp`, respectively.
+* `powdRfps` and `powdRafps` objects, derived from `fps()` and `afps()`,
+  respectively, now include data for the full 2theta range, even when discrete
+  limits are set using the `tth_fps` argument.
+* Methods `plot.powdRfps` and `plot.powdRafps` now include grey boxes for areas
+  that were excluded from the fitting process via the `tth_fps` argument. These
+  boxes can be turned off by setting the `show_excluded` argument to `FALSE`.
+* `fps_lm()` added that facilitates non-quantitative full-pattern summation by
+  linear regression, yielding a `powdRlm` object. Derived coefficients may be
+  either positive or negative, making the function particularly suitable for
+  fitting the loadings from principal component analysis.
+* `plot` method for `powdRlm` objects added.
+* `xrpd_pca()` facilitates principal component analysis of XRPD patterns. The
+  derived loading for each dimension can be fitted to patterns within a
+  `powdRlib` reference library using `fps_lm()`.
+
 # powdR 1.2.5
 
 ## New features
-# `fps()` and `afps()` now accept diffraction data that has negative values for count
+* `fps()` and `afps()` now accept diffraction data that has negative values for count
   intensities. In such cases Rwp cannot be used as the objective function and R will
   be used as the default instead.
-# The `rwp` item in the outputs from `fps()` and `afps()` has been renamed `obj`, which
+* The `rwp` item in the outputs from `fps()` and `afps()` has been renamed `obj`, which
   contains a named vector of the values for three objective parameters: Rwp, R and
   Delta.
-# `summarise_mineralogy` now accepts two additional arguments: `r` and `delta` which are
+* `summarise_mineralogy` now accepts two additional arguments: `r` and `delta` which are
   logical parameters used to specify whether the R and Delta objective parameters,
   respectively,are included in the summary table.
 
 # powdR 1.2.4
 
 ## New features
-# `powdRlib()` now accepts a logical `check_names` argument. If `TRUE` (the default) then
+* `powdRlib()` now accepts a logical `check_names` argument. If `TRUE` (the default) then
   the names of the variables are checked to ensure that they are syntactically valid and
   are not duplicated.
 
 ## Bug fixes
-# Default value for the normalise argument in `fps()` and `afps()` is now supplied
+* Default value for the normalise argument in `fps()` and `afps()` is now supplied
   (`FALSE`)
-# `powdRlib()` now ensures that the `phases` object is a dataframe.
+* `powdRlib()` now ensures that the `phases` object is a dataframe.
 
 # powdR 1.2.3
 

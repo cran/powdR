@@ -1,3 +1,50 @@
+.subset_tth_xy <- function(x, xlim) {
+
+  x <- x[which(x[[1]] >= xlim[1] & x[[1]] <= xlim[2]),]
+
+  return(x)
+
+}
+
+.rng_nm <- function(x){(x-min(x))/(max(x)-min(x))}
+
+.rng_nm_xy <- function(x) {
+
+  x <- data.frame("tth" = x[[1]],
+                  "counts" = .rng_nm(x[[2]]))
+
+  return(x)
+
+}
+
+.group_patterns <- function(x) {
+
+  wpp_df <- x$weighted_pure_patterns
+
+  if (!identical(names(wpp_df), x$phases$phase_id)) {
+
+    stop("The ID's and names don't match")
+
+  }
+
+  wpp_df <- data.frame(t(wpp_df))
+
+  wpp_df <- data.frame("phase_name" = x$phases$phase_name,
+                       wpp_df)
+
+  wpp_df <- stats::aggregate(. ~ phase_name, data = wpp_df, FUN = sum)
+  wpp_df_names <- wpp_df$phase_name
+  wpp_df <- data.frame(t(wpp_df[-1]))
+  names(wpp_df) <- wpp_df_names
+  rownames(wpp_df) <- NULL
+
+  x$weighted_pure_patterns <- wpp_df
+
+  return(x)
+
+}
+
+
 .gg_color_hue <- function(n) {
   hues = seq(15, 375, length = n + 1)
   grDevices::hcl(h = hues, l = 65, c = 100)[1:n]
@@ -18,8 +65,12 @@
 #' of 1.54056 or 1.78897 are used, respectively.
 #' @param mode One of "fit", "residuals" or "both" defining whether to plot the fitted
 #' patterns, the residuals of the fit, or both, respectively. Default = "fit".
-#' @param xlim A numeric vector of length two providing limits of the x-axis. Defaults
-#' to full x-axis unless specified.
+#' @param group A logical parameter used to specify whether the plotted data are grouped
+#' according to the phase name. Default = FALSE.
+#' @param xlim A numeric vector providing limits of the x-axis (E.g. \code{c(10, 60)}).
+#' Defaults to full x-axis unless specified.
+#' @param show_excluded A logical value specifying whether the areas excluded from the
+#' fitting are identified in the plot as grey rectangles. Default \code{= TRUE}.
 #' @param interactive logical. If TRUE then the output will be an interactive
 #' ggplotly object. If FALSE then the output will be a ggplot object.
 #' @param ... other arguments
@@ -43,7 +94,21 @@
 #' plot(fps_sand, wavelength = "Cu", interactive = TRUE)
 #' }
 #' @export
-plot.powdRfps <- function(x, wavelength, mode, xlim, interactive, ...) {
+plot.powdRfps <- function(x, wavelength, mode, group,
+                          xlim, show_excluded, interactive, ...) {
+
+  if (missing(group)) {
+
+    group <- FALSE
+
+  }
+
+  if (!is.logical(group)) {
+
+    stop("group must be logical",
+         call. = FALSE)
+
+  }
 
   if (missing(xlim)) {
 
@@ -81,17 +146,26 @@ plot.powdRfps <- function(x, wavelength, mode, xlim, interactive, ...) {
 
   if (!mode %in% c("fit", "residuals", "both")) {
 
-    stop("The mode arugment must be one of `fit`, `residuals`, or `both`",
+    stop("The mode argument must be one of `fit`, `residuals`, or `both`",
          call. = FALSE)
 
+  }
+
+  if(missing(show_excluded)) {
+    show_excluded <- TRUE
+  }
+
+  if(!is.logical(show_excluded)) {
+    stop("The show_excluded argument must be logical.",
+         call. = FALSE)
   }
 
   if(missing(interactive)) {
     interactive <- FALSE
   }
 
-  if(!missing(interactive) & !is.logical(interactive)) {
-    stop("The interactive arugment must be logical.",
+  if(!is.logical(interactive)) {
+    stop("The interactive argument must be logical.",
          call. = FALSE)
   }
 
@@ -123,6 +197,14 @@ plot.powdRfps <- function(x, wavelength, mode, xlim, interactive, ...) {
     stop("The wavelength argument must be one of either 'Cu', 'Co', or
          a custom numeric value",
          call. = FALSE)
+
+  }
+
+  #Optional grouping
+
+  if (group == TRUE) {
+
+    x <- .group_patterns(x = x)
 
   }
 
@@ -177,11 +259,74 @@ plot.powdRfps <- function(x, wavelength, mode, xlim, interactive, ...) {
                                                         values = c("Residuals" = "blue")))
 
 
+  if (abs(x$inputs$tth_fps[1] - min(x$tth)) > (x$inputs$align + x$inputs$shift) &
+      show_excluded == TRUE) {
+
+    rect1 <- data.frame(xmin = min(x$tth), xmax = x$inputs$tth_fps[1],
+                        ymin = 0, ymax = max(pure_patterns_long$Counts))
+
+    rect2 <- data.frame(xmin = min(x$tth), xmax = x$inputs$tth_fps[1],
+                        ymin = min(resids$Counts), ymax = max(resids$Counts))
+
+    g1 <- suppressWarnings(g1 +
+                             ggplot2::geom_rect(data=rect1,
+                                                ggplot2::aes_(xmin = ~xmin,
+                                                              xmax = ~xmax,
+                                                              ymin = ~ymin,
+                                                              ymax = ~ymax,
+                                                              label = "Excluded from fit"),
+                                                color="grey10",
+                                                alpha=0.25))
+
+    g2 <- suppressWarnings(g2 +
+                             ggplot2::geom_rect(data=rect2,
+                                                ggplot2::aes_(xmin = ~xmin,
+                                                             xmax = ~xmax,
+                                                             ymin = ~ymin,
+                                                             ymax = ~ymax,
+                                                             label = "Excluded from fit"),
+                                                color="grey10",
+                                                alpha=0.25))
+
+  }
+
+  if (abs(x$inputs$tth_fps[1] - min(x$tth)) > (x$inputs$align + x$inputs$shift) &
+      show_excluded == TRUE) {
+
+    rect3 <- data.frame(xmin = x$inputs$tth_fps[2], xmax = max(x$tth),
+                        ymin = 0, ymax = max(pure_patterns_long$Counts))
+
+    rect4 <- data.frame(xmin = x$inputs$tth_fps[2], xmax = max(x$tth),
+                        ymin = min(resids$Counts), ymax = max(resids$Counts))
+
+    g1 <- suppressWarnings(g1 +
+                             ggplot2::geom_rect(data=rect3,
+                                                ggplot2::aes_(xmin = ~xmin,
+                                                              xmax = ~xmax,
+                                                              ymin = ~ymin,
+                                                              ymax = ~ymax,
+                                                              label = "Excluded from fit"),
+                                                color="grey10",
+                                                alpha=0.25))
+
+    g2 <- suppressWarnings(g2 +
+                             ggplot2::geom_rect(data=rect4,
+                                                ggplot2::aes_(xmin = ~xmin,
+                                                             xmax = ~xmax,
+                                                             ymin = ~ymin,
+                                                             ymax = ~ymax,
+                                                             label = "Excluded from fit"),
+                                                color="grey10",
+                                                alpha=0.25))
+
+  }
+
+
   if (interactive == TRUE) {
 
     #Convert to ggplotly
-    p1 <- plotly::ggplotly(g1, tooltip = c("x", "y", "d", "colour"))
-    p2 <- plotly::ggplotly(g2, tooltip = c("x", "y", "d", "colour"))
+    p1 <- plotly::ggplotly(g1, tooltip = c("x", "y", "d", "colour", "label"))
+    p2 <- plotly::ggplotly(g2, tooltip = c("x", "y", "d", "colour", "label"))
 
 
     if (mode == "fit") {
@@ -245,14 +390,18 @@ plot.powdRfps <- function(x, wavelength, mode, xlim, interactive, ...) {
 #' plots are particularly useful and can be specified with the \code{interactive}
 #' argument.
 #'
-#' @param x a powdRfps object
+#' @param x a powdRafps object
 #' @param wavelength One of "Cu", "Co" or a custom numeric value defining the wavelength
 #' (in Angstroms). Used to compute d-spacings.When "Cu" or "Co" are supplied, wavelengths
 #' of 1.54056 or 1.78897 are used, respectively.
 #' @param mode One of "fit", "residuals" or "both" defining whether to plot the fitted
 #' patterns, the residuals of the fit, or both, respectively. Default = "fit".
-#' @param xlim A numeric vector of length two providing limits of the x-axis. Defaults
-#' to full x-axis unless specified.
+#' @param group A logical parameter used to specify whether the plotted data are grouped
+#' according to the phase name. Default = FALSE.
+#' @param xlim A numeric vector providing limits of the x-axis (E.g. \code{c(10, 60)}).
+#' Defaults to full x-axis unless specified.
+#' @param show_excluded A logical value specifying whether the areas excluded from the
+#' fitting are identified in the plot as grey rectangles. Default \code{= TRUE}.
 #' @param interactive logical. If TRUE then the output will be an interactive
 #' ggplotly object. If FALSE then the output will be a ggplot object.
 #' @param ... other arguments
@@ -278,7 +427,20 @@ plot.powdRfps <- function(x, wavelength, mode, xlim, interactive, ...) {
 #'
 #' }
 #' @export
-plot.powdRafps <- function(x, wavelength, mode, xlim, interactive, ...) {
+plot.powdRafps <- function(x, wavelength, mode, group, xlim, show_excluded, interactive, ...) {
+
+  if (missing(group)) {
+
+    group <- FALSE
+
+  }
+
+  if (!is.logical(group)) {
+
+    stop("group must be logical",
+         call. = FALSE)
+
+  }
 
   if (missing(xlim)) {
 
@@ -315,9 +477,18 @@ plot.powdRafps <- function(x, wavelength, mode, xlim, interactive, ...) {
 
   if (!mode %in% c("fit", "residuals", "both")) {
 
-    stop("The mode arugment must be one of `fit`, `residuals`, or `both`",
+    stop("The mode argument must be one of `fit`, `residuals`, or `both`",
          call. = FALSE)
 
+  }
+
+  if(missing(show_excluded)) {
+    show_excluded <- TRUE
+  }
+
+  if(!is.logical(show_excluded)) {
+    stop("The show_excluded argument must be logical.",
+         call. = FALSE)
   }
 
   if(missing(interactive)) {
@@ -325,7 +496,7 @@ plot.powdRafps <- function(x, wavelength, mode, xlim, interactive, ...) {
   }
 
   if(!missing(interactive) & !is.logical(interactive)) {
-    stop("The interactive arugment must be logical.",
+    stop("The interactive argument must be logical.",
          call. = FALSE)
   }
 
@@ -357,6 +528,14 @@ plot.powdRafps <- function(x, wavelength, mode, xlim, interactive, ...) {
     stop("The wavelength argument must be one of either 'Cu', 'Co', or
          a custom numeric value",
          call. = FALSE)
+
+  }
+
+  #Optional grouping
+
+  if (group == TRUE) {
+
+    x <- .group_patterns(x = x)
 
   }
 
@@ -411,11 +590,413 @@ plot.powdRafps <- function(x, wavelength, mode, xlim, interactive, ...) {
                                                         values = c("Residuals" = "blue")))
 
 
+  if (abs(x$inputs$tth_fps[1] - min(x$tth)) > (x$inputs$align + x$inputs$shift) &
+      show_excluded == TRUE) {
+
+    rect1 <- data.frame(xmin = min(x$tth), xmax = x$inputs$tth_fps[1],
+                        ymin = 0, ymax = max(pure_patterns_long$Counts))
+
+    rect2 <- data.frame(xmin = min(x$tth), xmax = x$inputs$tth_fps[1],
+                        ymin = min(resids$Counts), ymax = max(resids$Counts))
+
+    g1 <- suppressWarnings(g1 +
+                             ggplot2::geom_rect(data=rect1,
+                                                ggplot2::aes_(xmin = ~xmin,
+                                                              xmax = ~xmax,
+                                                              ymin = ~ymin,
+                                                              ymax = ~ymax,
+                                                              label = "Excluded from fit"),
+                                                color="grey10",
+                                                alpha=0.25))
+
+    g2 <- suppressWarnings(g2 +
+                             ggplot2::geom_rect(data=rect2,
+                                                ggplot2::aes_(xmin = ~xmin,
+                                                              xmax = ~xmax,
+                                                              ymin = ~ymin,
+                                                              ymax = ~ymax,
+                                                              label = "Excluded from fit"),
+                                                color="grey10",
+                                                alpha=0.25))
+
+  }
+
+  if (abs(x$inputs$tth_fps[1] - min(x$tth)) > (x$inputs$align + x$inputs$shift) &
+      show_excluded == TRUE) {
+
+    rect3 <- data.frame(xmin = x$inputs$tth_fps[2], xmax = max(x$tth),
+                        ymin = 0, ymax = max(pure_patterns_long$Counts))
+
+    rect4 <- data.frame(xmin = x$inputs$tth_fps[2], xmax = max(x$tth),
+                        ymin = min(resids$Counts), ymax = max(resids$Counts))
+
+    g1 <- suppressWarnings(g1 +
+                             ggplot2::geom_rect(data=rect3,
+                                                ggplot2::aes_(xmin = ~xmin,
+                                                              xmax = ~xmax,
+                                                              ymin = ~ymin,
+                                                              ymax = ~ymax,
+                                                              label = "Excluded from fit"),
+                                                color="grey10",
+                                                alpha=0.25))
+
+    g2 <- suppressWarnings(g2 +
+                             ggplot2::geom_rect(data=rect4,
+                                                ggplot2::aes_(xmin = ~xmin,
+                                                              xmax = ~xmax,
+                                                              ymin = ~ymin,
+                                                              ymax = ~ymax,
+                                                              label = "Excluded from fit"),
+                                                color="grey10",
+                                                alpha=0.25))
+
+  }
+
+
   if (interactive == TRUE) {
 
     #Convert to ggplotly
-    p1 <- plotly::ggplotly(g1, tooltip = c("x", "y", "d", "colour"))
-    p2 <- plotly::ggplotly(g2, tooltip = c("x", "y", "d", "colour"))
+    p1 <- plotly::ggplotly(g1, tooltip = c("x", "y", "d", "colour", "label"))
+    p2 <- plotly::ggplotly(g2, tooltip = c("x", "y", "d", "colour", "label"))
+
+
+    if (mode == "fit") {
+
+      return(p1)
+
+    }
+
+    if (mode == "residuals") {
+
+      return(p2)
+
+    }
+
+    if (mode  == "both") {
+
+      p3 <- plotly::subplot(p1, p2,
+                            nrows = 2,
+                            heights = c((2/3), (1/3)),
+                            widths = c(1),
+                            shareX = TRUE,
+                            titleY = TRUE)
+
+      return(p3)
+
+    }
+
+  } else {
+
+    if (mode == "fit") {
+
+      return(g1)
+
+    }
+
+    if (mode == "residuals") {
+
+      return(g2)
+
+    }
+
+    if (mode == "both") {
+
+      g3 <- ggpubr::ggarrange(g1, g2, nrow = 2,
+                              heights = c(2,1))
+      return(g3)
+
+    }
+
+  }
+
+}
+
+#' Plotting elements of a powdRlm object
+#'
+#' \code{plot.powdRlm} is designed to provide easy, adaptable plots
+#' of full pattern summation outputs produced from \code{\link{fps_lm}}.
+#'
+#' When seeking to inspect the results from full pattern summation, interactive
+#' plots are particularly useful and can be specified with the \code{interactive}
+#' argument.
+#'
+#' @param x a powdRlm object
+#' @param wavelength One of "Cu", "Co" or a custom numeric value defining the wavelength
+#' (in Angstroms). Used to compute d-spacings.When "Cu" or "Co" are supplied, wavelengths
+#' of 1.54056 or 1.78897 are used, respectively.
+#' @param mode One of "fit", "residuals" or "both" defining whether to plot the fitted
+#' patterns, the residuals of the fit, or both, respectively. Default = "fit".
+#' @param xlim A numeric vector providing limits of the x-axis (E.g. \code{c(10, 60)}).
+#' Defaults to full x-axis unless specified.
+#' @param group A logical parameter used to specify whether the plotted data are grouped
+#' according to the phase name. Default = FALSE.
+#' @param show_excluded A logical value specifying whether the areas excluded from the
+#' fitting are identified in the plot as grey rectangles. Default \code{= TRUE}.
+#' @param interactive logical. If TRUE then the output will be an interactive
+#' ggplotly object. If FALSE then the output will be a ggplot object.
+#' @param ... other arguments
+#'
+#' @method plot powdRlm
+#' @examples
+#' data(rockjock)
+#' data(rockjock_mixtures)
+#'
+#' #Compute the PCA and loadings
+#' x1 <- xrpd_pca(rockjock_mixtures,
+#'                mean_center = TRUE,
+#'                bin_size = 1,
+#'                root_transform = 1)
+#'
+#' \dontrun{
+#' fps_lm_out <- fps_lm(rockjock,
+#'                      smpl = data.frame("x" = x1$loadings$tth,
+#'                                        "y" = x1$loadings$Dim.1),
+#'                      refs = rockjock$phases$phase_id,
+#'                      std = "QUARTZ",
+#'                      align = 0.3,
+#'                      p = 0.01)
+#'
+#' plot(fps_lm_out,
+#'      wavelength = "Cu",
+#'      interactive = TRUE,
+#'      group = TRUE)
+#'
+#' }
+#' @export
+plot.powdRlm <- function(x, wavelength, mode, xlim, group, show_excluded, interactive, ...) {
+
+  if (missing(xlim)) {
+
+    xlim <- c(min(x$tth), max(x$tth))
+
+  }
+
+  if (missing(group)) {
+
+    group <- FALSE
+
+  }
+
+  if (!is.logical(group)) {
+
+    stop("group must be logical",
+         call. = FALSE)
+
+  }
+
+  if (length(xlim) > 2) {
+
+    stop("xlim must be a numeric vector of length 2",
+         call. = FALSE)
+
+  }
+
+  if (!is.numeric(xlim)) {
+
+    stop("xlim must be a numeric vector of length 2",
+         call. = FALSE)
+
+  }
+
+  if (xlim[1] < min(x$tth) | xlim[2] > max(x$tth)) {
+
+    stop("The limits defined in xlim are outside of the 2theta range of the data",
+         call. = FALSE)
+
+  }
+
+  if (missing(mode)) {
+
+    mode <- "fit"
+
+  }
+
+  if (!mode %in% c("fit", "residuals", "both")) {
+
+    stop("The mode argument must be one of `fit`, `residuals`, or `both`",
+         call. = FALSE)
+
+  }
+
+  if(missing(show_excluded)) {
+    show_excluded <- TRUE
+  }
+
+  if(!is.logical(show_excluded)) {
+    stop("The show_excluded argument must be logical.",
+         call. = FALSE)
+  }
+
+  if(missing(interactive)) {
+    interactive <- FALSE
+  }
+
+  if(!missing(interactive) & !is.logical(interactive)) {
+    stop("The interactive argument must be logical.",
+         call. = FALSE)
+  }
+
+  #If wavelength is missing then stop the function call
+  if (missing(wavelength)) {
+
+    stop("Provide a wavelength so that d-spacings can be calculated",
+         call. = FALSE)
+
+  }
+
+  #If wavelength = "Cu" then define it
+  if (wavelength == "Cu") {
+
+    wavelength <- 1.54056
+
+  }
+
+  #If wavelength = "Cu" then define it
+  if (wavelength == "Co") {
+
+    wavelength <- 1.78897
+
+  }
+
+  #At this point if wavelength isn't numeric then stop
+  if (!is.numeric(wavelength)) {
+
+    stop("The wavelength argument must be one of either 'Cu', 'Co', or
+         a custom numeric value",
+         call. = FALSE)
+
+  }
+
+
+  #-----------------------------------
+  #Optional grouping
+  #-----------------------------------
+
+  if (group == TRUE) {
+
+    x <- .group_patterns(x = x)
+
+  }
+
+  #compute d
+  d_v <- round(wavelength/(2*sin((x$tth/2)*pi/180)), 3)
+
+  #Create a dataframe of the weighted pure patterns and fitted pattern
+  pure_patterns <- data.frame(tth = x$tth,
+                              d = d_v,
+                              Measured = x$measured,
+                              Fitted = x$fitted,
+                              x$weighted_pure_patterns,
+                              check.names = FALSE)
+
+  refs_colors <- .gg_color_hue(ncol(x$weighted_pure_patterns))
+
+  #Residuals
+  resids <- data.frame(tth = x$tth,
+                       d = d_v,
+                       Counts = x$residuals)
+
+  #melt the pure patterns data frame
+  pure_patterns_long <- reshape::melt(pure_patterns, id = c("tth", "d"))
+
+  #Name the counts column
+  names(pure_patterns_long)[4] <- "Counts"
+
+
+  g1 <- suppressWarnings(ggplot2::ggplot() +
+                           ggplot2::geom_line(data = pure_patterns_long,
+                                              ggplot2::aes_(x = ~tth, y = ~Counts,
+                                                            color = ~variable,
+                                                            linetype = ~variable,
+                                                            d = ~d),
+                                              size = 0.25) +
+                           ggplot2::scale_color_manual(values = c("black", "red",
+                                                                  refs_colors)) +
+                           ggplot2::scale_linetype_manual(values = c("solid", "solid",
+                                                                     rep("dotted", ncol(x$weighted_pure_patterns)))) +
+                           ggplot2::ylab("Counts") +
+                           ggplot2::xlab("2theta") +
+                           ggplot2::scale_x_continuous(limits = xlim) +
+                           ggplot2::theme(legend.title = ggplot2::element_blank()))
+
+  g2 <- suppressWarnings(ggplot2::ggplot() +
+                           ggplot2::geom_line(data = resids,
+                                              ggplot2::aes_(x = ~tth, y = ~Counts, color = "Residuals", d = ~d), size = 0.15) +
+                           ggplot2::ylab("Counts") +
+                           ggplot2::xlab("2theta") +
+                           ggplot2::scale_x_continuous(limits = xlim) +
+                           ggplot2::scale_colour_manual(name = "",
+                                                        values = c("Residuals" = "blue")))
+
+
+  if (abs(x$inputs$tth_fps[1] - min(x$tth)) > (x$inputs$align + x$inputs$shift) &
+      show_excluded == TRUE) {
+
+    rect1 <- data.frame(xmin = min(x$tth), xmax = x$inputs$tth_fps[1],
+                        ymin = min(pure_patterns_long$Counts), ymax = max(pure_patterns_long$Counts))
+
+    rect2 <- data.frame(xmin = min(x$tth), xmax = x$inputs$tth_fps[1],
+                        ymin = min(resids$Counts), ymax = max(resids$Counts))
+
+    g1 <- suppressWarnings(g1 +
+                             ggplot2::geom_rect(data=rect1,
+                                                ggplot2::aes_(xmin = ~xmin,
+                                                              xmax = ~xmax,
+                                                              ymin = ~ymin,
+                                                              ymax = ~ymax,
+                                                              label = "Excluded from fit"),
+                                                color="grey10",
+                                                alpha=0.25))
+
+    g2 <- suppressWarnings(g2 +
+                             ggplot2::geom_rect(data=rect2,
+                                                ggplot2::aes_(xmin = ~xmin,
+                                                             xmax = ~xmax,
+                                                             ymin = ~ymin,
+                                                             ymax = ~ymax,
+                                                             label = "Excluded from fit"),
+                                                color="grey10",
+                                                alpha=0.25))
+
+  }
+
+  if (abs(x$inputs$tth_fps[1] - min(x$tth)) > (x$inputs$align + x$inputs$shift) &
+      show_excluded == TRUE) {
+
+    rect3 <- data.frame(xmin = x$inputs$tth_fps[2], xmax = max(x$tth),
+                        ymin = min(pure_patterns_long$Counts), ymax = max(pure_patterns_long$Counts))
+
+    rect4 <- data.frame(xmin = x$inputs$tth_fps[2], xmax = max(x$tth),
+                        ymin = min(resids$Counts), ymax = max(resids$Counts))
+
+    g1 <- suppressWarnings(g1 +
+                             ggplot2::geom_rect(data=rect3,
+                                                ggplot2::aes_(xmin = ~xmin,
+                                                              xmax = ~xmax,
+                                                              ymin = ~ymin,
+                                                              ymax = ~ymax,
+                                                              label = "Excluded from fit"),
+                                                color="grey10",
+                                                alpha=0.25))
+
+    g2 <- suppressWarnings(g2 +
+                             ggplot2::geom_rect(data=rect4,
+                                                ggplot2::aes_(xmin = ~xmin,
+                                                             xmax = ~xmax,
+                                                             ymin = ~ymin,
+                                                             ymax = ~ymax,
+                                                             label = "Excluded from fit"),
+                                                color="grey10",
+                                                alpha=0.25))
+
+  }
+
+
+  if (interactive == TRUE) {
+
+    #Convert to ggplotly
+    p1 <- plotly::ggplotly(g1, tooltip = c("x", "y", "d", "colour", "label"))
+    p2 <- plotly::ggplotly(g2, tooltip = c("x", "y", "d", "colour", "label"))
 
 
     if (mode == "fit") {
@@ -555,7 +1136,7 @@ plot.powdRlib <- function(x, wavelength, refs, interactive, ...) {
   }
 
   if(!missing(interactive) & !is.logical(interactive)) {
-    stop("The interactive arugment must be logical.",
+    stop("The interactive argument must be logical.",
          call. = FALSE)
   }
 
@@ -599,7 +1180,7 @@ plot.powdRlib <- function(x, wavelength, refs, interactive, ...) {
 #' The only mandatory argument is x, which must be a powdRbkg object. Plots can
 #' be made interactive using the logical \code{interactive} argument.
 #'
-#' @param x a powdRlib object
+#' @param x a powdRbkg object
 #' @param interactive Logical. If TRUE then the output will be an interactive
 #' ggplotly object. If FALSE then the output will be a ggplot object.
 #' @param ... other arguments
@@ -621,7 +1202,7 @@ plot.powdRbkg <- function(x, interactive, ...) {
   }
 
   if(!missing(interactive) & !is.logical(interactive)) {
-    stop("The interactive arugment must be logical.",
+    stop("The interactive argument must be logical.",
          call. = FALSE)
   }
 
@@ -651,3 +1232,286 @@ plot.powdRbkg <- function(x, interactive, ...) {
   return(p)
 
   }
+
+
+#' Plotting a multiXY object
+#'
+#' \code{plot.multiXY} is designed to provide easy, adaptable plots
+#' of multiple XRPD patterns.
+#'
+#' Plots can be made interactive using the logical \code{interactive} argument.
+#'
+#' @param x a multiXY object
+#' @param wavelength One of "Cu", "Co" or a custom numeric value defining the wavelength
+#' (in Angstroms). Used to compute d-spacings.When "Cu" or "Co" are supplied, wavelengths
+#' of 1.54056 or 1.78897 are used, respectively.
+#' @param xlim A numeric vector providing limits of the x-axis (E.g. \code{c(10, 60)}).
+#' Defaults to full x-axis unless specified.
+#' @param normalise Logical. If TRUE then count intensities will be normalised to a
+#' minimum of zero and maximum of 1. Default \code{= FALSE}.
+#' @param interactive Logical. If TRUE then the output will be an interactive
+#' ggplotly object. If FALSE then the output will be a ggplot object.
+#' @param ... other arguments
+#'
+#' @method plot multiXY
+#'
+#' @examples
+#' # Load the minerals library
+#' data(rockjock_mixtures)
+#' \dontrun{
+#' plot(as_multi_xy(rockjock_mixtures), wavelength = "Cu")
+#' plot(as_multi_xy(rockjock_mixtures), wavelength = "Cu", interactive = TRUE)
+#' }
+#' @export
+plot.multiXY <- function(x, wavelength, xlim, normalise, interactive, ...) {
+
+  #If normalise is missing then set it to FALSE
+  if (missing(normalise)) {
+
+    normalise <- FALSE
+
+  }
+
+  if (!is.logical(normalise)) {
+
+    stop("The normalise argument must be logical.",
+         call. = FALSE)
+
+  }
+
+  #If wavelength is missing then stop the function call
+  if (missing(wavelength)) {
+
+    stop("Provide a wavelength so that d-spacings can be calculated",
+         call. = FALSE)
+
+  }
+
+  #If wavelength = "Cu" then define it
+  if (wavelength == "Cu") {
+
+    wavelength <- 1.54056
+
+  }
+
+  #If wavelength = "Cu" then define it
+  if (wavelength == "Co") {
+
+    wavelength <- 1.78897
+
+  }
+
+  #At this point if wavelength isn't numeric then stop
+  if (!is.numeric(wavelength)) {
+
+    stop("The wavelength argument must be one of either 'Cu', 'Co', or
+         a custom numeric value",
+         call. = FALSE)
+
+  }
+
+  if(missing(interactive)) {
+    interactive <- FALSE
+  }
+
+  if(!missing(interactive) & !is.logical(interactive)) {
+    stop("The interactive argument must be logical.",
+         call. = FALSE)
+  }
+
+  #Define the xlims if not defined
+  if (missing(xlim)) {
+
+    tth_min <- min(unlist(lapply(x, function(x) min(x[[1]]))))
+    tth_max <- max(unlist(lapply(x, function(x) max(x[[1]]))))
+
+    xlim <- c(tth_min, tth_max)
+
+  }
+
+  if (!is.numeric(xlim)) {
+
+    stop("xlim must be a numeric vector of length 2.",
+         call. = FALSE)
+
+  }
+
+  #Subset based on the xlims
+  x <- lapply(x, .subset_tth_xy, xlim = xlim)
+
+  #Normalise counts if required
+  if (normalise == TRUE) {
+
+    x <- lapply(x, .rng_nm_xy)
+
+  }
+
+  #Create a d vector for each item
+
+  for (i in 1:length(x)) {
+
+    x[[i]]$d <- round(wavelength/(2*sin((x[[i]]$tth/2)*pi/180)), 3)
+
+  }
+
+  #Populate each item in the list with an ID
+  for (i in 1:length(x)) {
+
+   x[[i]]$id <- names(x)[i]
+
+  }
+
+  #Now bind into long dataframe
+  x_long <- do.call(rbind, x)
+
+  p <- suppressWarnings(ggplot2::ggplot(data = x_long) +
+                          ggplot2::geom_line(ggplot2::aes_(x = ~tth, y = ~counts,
+                                                           color = ~id, d = ~d),
+                                             size = 0.15) +
+                          ggplot2::xlab("2theta") +
+                          ggplot2::ylab("Counts") +
+                          ggplot2::theme(legend.title = ggplot2::element_blank()))
+
+
+  if(interactive == TRUE) {
+    p <- plotly::ggplotly(p)
+  }
+
+  return(p)
+
+}
+
+
+#' Plotting an XY object
+#'
+#' \code{plot.XY} is designed to provide easy, adaptable plots
+#' of an XRPD pattern.
+#'
+#' Plots can be made interactive using the logical \code{interactive} argument.
+#'
+#' @param x an XY object
+#' @param wavelength One of "Cu", "Co" or a custom numeric value defining the wavelength
+#' (in Angstroms). Used to compute d-spacings.When "Cu" or "Co" are supplied, wavelengths
+#' of 1.54056 or 1.78897 are used, respectively.
+#' @param xlim A numeric vector providing limits of the x-axis (E.g. \code{c(10, 60)}).
+#' Defaults to full x-axis unless specified.
+#' @param normalise Logical. If TRUE then count intensities will be normalised to a
+#' minimum of zero and maximum of 1. Default \code{= FALSE}.
+#' @param interactive Logical. If TRUE then the output will be an interactive
+#' ggplotly object. If FALSE then the output will be a ggplot object.
+#' @param ... other arguments
+#'
+#' @method plot XY
+#'
+#' @examples
+#' # Load the minerals library
+#' data(rockjock_mixtures)
+#' \dontrun{
+#' plot(rockjock_mixtures$Mix1, wavelength = "Cu")
+#' plot(rockjock_mixtures$Mix1, wavelength = "Cu", interactive = TRUE)
+#' }
+#' @export
+plot.XY <- function(x, wavelength, xlim, normalise, interactive, ...) {
+
+  #If normalise is missing then set it to FALSE
+  if (missing(normalise)) {
+
+    normalise <- FALSE
+
+  }
+
+  if (!is.logical(normalise)) {
+
+    stop("The normalise argument must be logical.",
+         call. = FALSE)
+
+  }
+
+  #If wavelength is missing then stop the function call
+  if (missing(wavelength)) {
+
+    stop("Provide a wavelength so that d-spacings can be calculated",
+         call. = FALSE)
+
+  }
+
+  #If wavelength = "Cu" then define it
+  if (wavelength == "Cu") {
+
+    wavelength <- 1.54056
+
+  }
+
+  #If wavelength = "Cu" then define it
+  if (wavelength == "Co") {
+
+    wavelength <- 1.78897
+
+  }
+
+  #At this point if wavelength isn't numeric then stop
+  if (!is.numeric(wavelength)) {
+
+    stop("The wavelength argument must be one of either 'Cu', 'Co', or
+         a custom numeric value",
+         call. = FALSE)
+
+  }
+
+  if(missing(interactive)) {
+    interactive <- FALSE
+  }
+
+  if(!missing(interactive) & !is.logical(interactive)) {
+    stop("The interactive argument must be logical.",
+         call. = FALSE)
+  }
+
+  #Define the xlims if not defined
+  if (missing(xlim)) {
+
+    tth_min <- min(x[[1]])
+    tth_max <- max(x[[1]])
+
+    xlim <- c(tth_min, tth_max)
+
+  }
+
+  if (!is.numeric(xlim)) {
+
+    stop("xlim must be a numeric vector of length 2.",
+         call. = FALSE)
+
+  }
+
+  #Subset based on the xlims
+  x <- .subset_tth_xy(x, xlim)
+
+  #Normalise counts if required
+  if (normalise == TRUE) {
+
+    x <- .rng_nm_xy(x)
+
+  }
+
+  #Create a d vector for each item
+
+  x$d <- round(wavelength/(2*sin((x$tth/2)*pi/180)), 3)
+
+  p <- suppressWarnings(ggplot2::ggplot(data = x) +
+                          ggplot2::geom_line(ggplot2::aes_(x = ~tth, y = ~counts,
+                                                           d = ~d),
+                                             size = 0.15,
+                                             colour = "blue") +
+                          ggplot2::xlab("2theta") +
+                          ggplot2::ylab("Counts") +
+                          ggplot2::theme(legend.title = ggplot2::element_blank()))
+
+
+  if(interactive == TRUE) {
+    p <- plotly::ggplotly(p)
+  }
+
+  return(p)
+
+}

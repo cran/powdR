@@ -14,13 +14,13 @@
 #'
 #' @return a \code{powdRfps} or \code{powdRafps} object with components:
 #' \item{tth}{a vector of the 2theta scale of the fitted data}
-#' \item{fitted}{a vector of the fitted XRPD pattern}
-#' \item{measured}{a vector of the original XRPD measurement (aligned)}
-#' \item{residuals}{a vector of the residuals (fitted vs measured)}
+#' \item{fitted}{a vector of the count intensities of fitted XRPD pattern}
+#' \item{measured}{a vector of the count intensities of original XRPD measurement (aligned)}
+#' \item{residuals}{a vector of the residuals (measured minus fitted)}
 #' \item{phases}{a dataframe of the phases used to produce the fitted pattern}
-#' \item{phases_grouped}{the phases dataframe regrouped according to the supplied data}
-#' \item{rwp}{the Rwp of the fitted vs measured pattern}
-#' \item{weighted_pure_patterns}{a data frame of reference patterns used to produce the fitted pattern.
+#' \item{phases_grouped}{the phases dataframe grouped and summed by phase_name}
+#' \item{obj}{named vector of the objective parameters summarising the quality of the fit}
+#' \item{weighted_pure_patterns}{a dataframe of reference patterns used to produce the fitted pattern.
 #' All patterns have been weighted according to the coefficients used in the fit}
 #' \item{coefficients}{a named vector of coefficients used to produce the fitted pattern}
 #' \item{inputs}{a list of input arguments used in the function call}
@@ -33,7 +33,7 @@
 #' data(soils)
 #'
 #' #Load the regrouping structure
-#' data(minerals_regroup_structure)
+#' data(minerals_regroup)
 #'
 #' \dontrun{
 #' fps_sandstone <- fps(lib = minerals,
@@ -43,7 +43,7 @@
 #'                      align = 0.2)
 #'
 #' fps_sandstone_regrouped <- regroup(fps_sandstone,
-#'                                    minerals_regroup_structure)
+#'                                    minerals_regroup)
 #'
 #' fps_sandstone_regrouped$phases_grouped
 #'
@@ -56,28 +56,28 @@ regroup <- function(x, ...) {
 
 #' regroup
 #'
-#' \code{regroup} allows an alternative grouping structure to be applied to \code{powdRfps}
-#' and \code{powdRafps} objects.
+#' \code{regroup.powdRfps} allows an alternative grouping structure to be applied to \code{powdRfps}
+#' objects.
 #'
-#' \code{powdRfps} and \code{powdRafps} objects contain a data frame called \code{phases_grouped}
+#' \code{powdRfps} objects contain a data frame called \code{phases_grouped}
 #' that summarises phase concentrations based on defined mineral groups from the \code{powdRlib}
 #' reference library. \code{regroup} allows you to change this grouping structure by supplying
 #' new group identities.
 #'
-#' @param x A \code{powdRfps} or \code{powdRafps} object
+#' @param x A \code{powdRfps} object
 #' @param y A data frame. First column contains the phase IDs covering all those present in
 #' \code{x$phases$phase_id}. Second column contains the desired grouping of each phase.
 #' @param ... other arguments
 #'
-#' @return a list with components:
+#' @return a \code{powdRfps} object with components:
 #' \item{tth}{a vector of the 2theta scale of the fitted data}
-#' \item{fitted}{a vector of the fitted XRPD pattern}
-#' \item{measured}{a vector of the original XRPD measurement (aligned)}
-#' \item{residuals}{a vector of the residuals (fitted vs measured)}
-#' \item{phases}{a dataframe of the phases used to produce the fitted pattern and their concentrations}
-#' \item{phases_grouped}{the phases dataframe regrouped according to the supplied data}
-#' \item{rwp}{the Rwp of the fitted vs measured pattern}
-#' \item{weighted_pure_patterns}{a data frame of reference patterns used to produce the fitted pattern.
+#' \item{fitted}{a vector of the count intensities of fitted XRPD pattern}
+#' \item{measured}{a vector of the count intensities of original XRPD measurement (aligned)}
+#' \item{residuals}{a vector of the residuals (measured minus fitted)}
+#' \item{phases}{a dataframe of the phases used to produce the fitted pattern}
+#' \item{phases_grouped}{the phases dataframe grouped and summed by phase_name}
+#' \item{obj}{named vector of the objective parameters summarising the quality of the fit}
+#' \item{weighted_pure_patterns}{a dataframe of reference patterns used to produce the fitted pattern.
 #' All patterns have been weighted according to the coefficients used in the fit}
 #' \item{coefficients}{a named vector of coefficients used to produce the fitted pattern}
 #' \item{inputs}{a list of input arguments used in the function call}
@@ -90,7 +90,7 @@ regroup <- function(x, ...) {
 #' data(soils)
 #'
 #' #Load the regrouping structure
-#' data(minerals_regroup_structure)
+#' data(minerals_regroup)
 #'
 #' \dontrun{
 #' fps_sandstone <- fps(lib = minerals,
@@ -100,7 +100,7 @@ regroup <- function(x, ...) {
 #'                      align = 0.2)
 #'
 #' fps_sandstone_regrouped <- regroup(fps_sandstone,
-#'                                    minerals_regroup_structure)
+#'                                    minerals_regroup)
 #'
 #' fps_sandstone_regrouped$phases_grouped
 #'
@@ -140,28 +140,28 @@ regroup.powdRfps <- function(x, y, ...) {
 
 #' regroup
 #'
-#' \code{regroup} allows an alternative grouping structure to be applied to \code{powdRfps}
-#' and \code{powdRafps} objects.
+#' \code{regroup.powdRafps} allows an alternative grouping structure to be applied to
+#' \code{powdRafps} objects.
 #'
-#' \code{powdRfps} and \code{powdRafps} objects contain a data frame called \code{phases_grouped}
+#' \code{powdRafps} objects contain a data frame called \code{phases_grouped}
 #' that summarises phase concentrations based on defined mineral groups from the \code{powdRlib}
 #' reference library. \code{regroup} allows you to change this grouping structure by supplying
 #' new group identities.
 #'
-#' @param x A \code{powdRfps} or \code{powdRafps} object
+#' @param x A \code{powdRafps} object
 #' @param y A data frame. First column contains the phase IDs covering all those present in
 #' \code{x$phases$phase_id}. Second column contains the desired grouping of each phase.
 #' @param ... other arguments
 #'
-#' @return a list with components:
+#' @return a \code{powdRafps} object with components:
 #' \item{tth}{a vector of the 2theta scale of the fitted data}
-#' \item{fitted}{a vector of the fitted XRPD pattern}
-#' \item{measured}{a vector of the original XRPD measurement (aligned)}
-#' \item{residuals}{a vector of the residuals (fitted vs measured)}
-#' \item{phases}{a dataframe of the phases used to produce the fitted pattern and their concentrations}
-#' \item{phases_grouped}{the phases dataframe regrouped according to the supplied data}
-#' \item{rwp}{the Rwp of the fitted vs measured pattern}
-#' \item{weighted_pure_patterns}{a data frame of reference patterns used to produce the fitted pattern.
+#' \item{fitted}{a vector of the count intensities of fitted XRPD pattern}
+#' \item{measured}{a vector of the count intensities of original XRPD measurement (aligned)}
+#' \item{residuals}{a vector of the residuals (measured minus fitted)}
+#' \item{phases}{a dataframe of the phases used to produce the fitted pattern}
+#' \item{phases_grouped}{the phases dataframe grouped and summed by phase_name}
+#' \item{obj}{named vector of the objective parameters summarising the quality of the fit}
+#' \item{weighted_pure_patterns}{a dataframe of reference patterns used to produce the fitted pattern.
 #' All patterns have been weighted according to the coefficients used in the fit}
 #' \item{coefficients}{a named vector of coefficients used to produce the fitted pattern}
 #' \item{inputs}{a list of input arguments used in the function call}
@@ -174,7 +174,7 @@ regroup.powdRfps <- function(x, y, ...) {
 #' data(soils)
 #'
 #' #Load the regrouping structure
-#' data(minerals_regroup_structure)
+#' data(minerals_regroup)
 #'
 #' \dontrun{
 #' afps_sandstone <- afps(lib = minerals,
@@ -186,7 +186,7 @@ regroup.powdRfps <- function(x, y, ...) {
 #'                        amorphous_lod = 1)
 #'
 #' afps_sandstone_regrouped <- regroup(afps_sandstone,
-#'                                     minerals_regroup_structure)
+#'                                     minerals_regroup)
 #'
 #' afps_sandstone_regrouped$phases_grouped
 #' }
